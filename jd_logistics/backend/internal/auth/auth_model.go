@@ -11,19 +11,23 @@ type User struct {
 	Phone     string     `gorm:"uniqueIndex;not null" json:"phone"`
 	Name      string     `json:"name"`
 	Email     string     `json:"email"`
-	Role      string     `gorm:"default:customer" json:"role"`
+	Role      string     `gorm:"default:'customer'" json:"role"`
 	AvatarURL string     `json:"avatar_url"`
 	IsActive  bool       `gorm:"default:true" json:"is_active"`
 	LastLogin *time.Time `json:"last_login"`
 }
 
+func (User) TableName() string { return "jd_logistics.users" }
+
 type OTPRecord struct {
 	utils.Model
-	Phone     string    `gorm:"index;not null"`
-	OTP       string    `gorm:"not null"`
-	ExpiresAt time.Time `gorm:"not null"`
-	Used      bool      `gorm:"default:false"`
+	Phone     string    `gorm:"index;not null" json:"phone"`
+	OTP       string    `gorm:"not null" json:"otp"`
+	ExpiresAt time.Time `gorm:"not null" json:"expires_at"`
+	Used      bool      `gorm:"default:false" json:"used"`
 }
+
+func (OTPRecord) TableName() string { return "jd_logistics.otp_records" }
 
 type SendOTPRequest struct {
 	Phone string `json:"phone" binding:"required"`

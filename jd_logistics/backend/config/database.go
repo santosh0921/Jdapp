@@ -15,6 +15,12 @@ func ConnectDatabase(cfg *Config) *gorm.DB {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	log.Println("Database connected")
+
+	// Create the jd_logistics schema — idempotent, safe on every start
+	if err := db.Exec("CREATE SCHEMA IF NOT EXISTS jd_logistics").Error; err != nil {
+		log.Fatalf("Failed to create jd_logistics schema: %v", err)
+	}
+	log.Println("Schema jd_logistics ready")
+	log.Println("Database connected to crednova_db")
 	return db
 }

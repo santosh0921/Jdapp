@@ -10,8 +10,11 @@ import (
 	"jd_logistics/internal/admin"
 	"jd_logistics/internal/auth"
 	"jd_logistics/internal/driver"
+	"jd_logistics/internal/master"
+	"jd_logistics/internal/migrations"
 	"jd_logistics/internal/notifications"
 	"jd_logistics/internal/payments"
+	"jd_logistics/internal/seed"
 	"jd_logistics/internal/shipments"
 	"jd_logistics/internal/tracking"
 	"jd_logistics/internal/users"
@@ -21,38 +24,31 @@ import (
 
 func main() {
 	cfg := config.LoadEnv()
-
 	db := config.ConnectDatabase(cfg)
-
-	if err := db.AutoMigrate(
-		&auth.User{},
-		&auth.OTPRecord{},
-		&shipments.Shipment{},
-		&tracking.TrackingEvent{},
-		&driver.DriverProfile{},
-		&driver.EarningRecord{},
-		&warehouse.WarehouseProfile{},
-		&payments.Transaction{},
-		&payments.WalletBalance{},
-		&notifications.Notification{},
-	); err != nil {
-		log.Fatalf("AutoMigrate failed: %v", err)
-	}
-	log.Println("Database migrated")
-
 	rdb := config.ConnectRedis(cfg)
+
+	// Idempotent migrations — creates missing tables/columns only, never drops
+	if err := migrations.Run(db); err != nil {
+		log.Fatalf("Migration failed: %v", err)
+	}
+
+	// Seed master reference data — safe to run on every startup
+	seed.Run(db)
 
 	r := gin.Default()
 	r.Use(middleware.CORS())
 
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "schema": "jd_logistics", "db": "crednova_db"})
 	})
 
 	api := r.Group("/api/v1")
 
+	// Public routes — no auth required
 	auth.RegisterRoutes(api, db, rdb, cfg)
+	master.RegisterRoutes(api, db)
 
+	// Protected routes — JWT required
 	protected := api.Group("")
 	protected.Use(middleware.Auth(cfg.JWTSecret))
 
@@ -64,8 +60,9 @@ func main() {
 	payments.RegisterRoutes(protected, db)
 	notifications.RegisterRoutes(protected, db)
 
+	// Admin-only routes
 	adminGroup := protected.Group("/admin")
-	adminGroup.Use(middleware.RequireRole("admin"))
+	adminGroup.Use(middleware.RequireRole("admin", "superadmin"))
 	admin.RegisterRoutes(adminGroup, db)
 
 	log.Printf("Server running on :%s", cfg.Port)
