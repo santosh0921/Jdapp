@@ -1,0 +1,49 @@
+# ── Secrets — NEVER commit these ─────────────────────────────────────────────
+.env
+.env.docker
+.env.local
+.env.*.local
+*.pem
+*.key
+google-services.json
+GoogleService-Info.plist
+
+# ── Go backend ────────────────────────────────────────────────────────────────
+jd_logistics/backend/server
+jd_logistics/backend/*.exe
+jd_logistics/backend/tmp/
+jd_logistics/backend/vendor/
+
+# ── Flutter / Dart ────────────────────────────────────────────────────────────
+jd_logistics/frontend/.dart_tool/
+jd_logistics/frontend/.flutter-plugins
+jd_logistics/frontend/.flutter-plugins-dependencies
+jd_logistics/frontend/.packages
+jd_logistics/frontend/build/
+jd_logistics/frontend/.idea/
+
+# Android generated files
+jd_logistics/frontend/android/.gradle/
+jd_logistics/frontend/android/local.properties
+jd_logistics/frontend/android/key.properties
+jd_logistics/frontend/android/app/debug.keystore
+jd_logistics/frontend/android/app/release.keystore
+jd_logistics/frontend/android/app/*.jks
+jd_logistics/frontend/android/gradle/wrapper/gradle-wrapper.jar
+
+# iOS generated files
+jd_logistics/frontend/ios/Pods/
+jd_logistics/frontend/ios/.symlinks/
+jd_logistics/frontend/ios/Flutter/Flutter.framework
+jd_logistics/frontend/ios/Flutter/Flutter.podspec
+jd_logistics/frontend/ios/Runner.xcworkspace/
+
+# ── OS / Editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*~

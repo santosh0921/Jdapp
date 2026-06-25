@@ -1,0 +1,510 @@
+{
+  "info": {
+    "name": "JD Logistics API",
+    "description": "Complete API collection for JD Logistics — Auth, Courier, Logistics, Payments, Admin, Tracking",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "variable": [
+    { "key": "base_url",      "value": "http://localhost:8080/api/v1", "type": "string" },
+    { "key": "access_token",  "value": "", "type": "string" },
+    { "key": "refresh_token", "value": "", "type": "string" },
+    { "key": "phone",         "value": "+919876543210", "type": "string" },
+    { "key": "otp",           "value": "123456", "type": "string" },
+    { "key": "order_id",      "value": "JDC-2024-0001", "type": "string" },
+    { "key": "user_id",       "value": "USR001", "type": "string" },
+    { "key": "driver_id",     "value": "DRV001", "type": "string" },
+    { "key": "warehouse_id",  "value": "WH001", "type": "string" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{access_token}}", "type": "string" }]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-attach Authorization header for all requests",
+          "const token = pm.collectionVariables.get('access_token');",
+          "if (token) { pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token }); }"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Send OTP (Customer)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "pm.test('Has success flag', () => pm.response.json().success === true);"
+          ], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/send-otp",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"phone\": \"{{phone}}\", \"role\": \"courier_customer\" }" }
+          }
+        },
+        {
+          "name": "Verify OTP (Customer)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('Status 200', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "if (body.data) {",
+            "  pm.collectionVariables.set('access_token', body.data.access_token);",
+            "  pm.collectionVariables.set('refresh_token', body.data.refresh_token);",
+            "}"
+          ], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/verify-otp",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"phone\": \"{{phone}}\", \"otp\": \"{{otp}}\", \"role\": \"courier_customer\" }" }
+          }
+        },
+        {
+          "name": "Admin Login (Email)",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/admin-login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"email\": \"admin@jdlogistics.com\", \"password\": \"Admin@1234\" }" }
+          }
+        },
+        {
+          "name": "Admin Verify OTP",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/admin-verify-otp",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"email\": \"admin@jdlogistics.com\", \"otp\": \"{{otp}}\" }" }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const body = pm.response.json();",
+            "if (body.data) {",
+            "  pm.collectionVariables.set('access_token', body.data.access_token);",
+            "  if (body.data.refresh_token) pm.collectionVariables.set('refresh_token', body.data.refresh_token);",
+            "}"
+          ], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/refresh-token",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"refresh_token\": \"{{refresh_token}}\" }" }
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": { "method": "GET", "url": "{{base_url}}/auth/profile" }
+        },
+        {
+          "name": "Setup Profile",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/setup-profile",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"name\": \"Rahul Sharma\", \"email\": \"rahul@example.com\", \"gst_number\": \"27AAPFU0939F1ZV\" }" }
+          }
+        },
+        {
+          "name": "Logout",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.collectionVariables.set('access_token', '');",
+            "pm.collectionVariables.set('refresh_token', '');"
+          ], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/logout",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"refresh_token\": \"{{refresh_token}}\" }" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Services",
+      "item": [
+        {
+          "name": "Get Available Services",
+          "request": { "method": "GET", "url": "{{base_url}}/services" }
+        },
+        {
+          "name": "Select Service",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/services/select",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"service\": \"courier\" }" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Pricing",
+      "item": [
+        {
+          "name": "Courier Estimate",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/pricing/courier-estimate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"from_pincode\": \"400001\",\n  \"to_pincode\": \"110001\",\n  \"weight_kg\": 2.5,\n  \"length_cm\": 30,\n  \"width_cm\": 20,\n  \"height_cm\": 15,\n  \"declared_value\": 5000\n}" }
+          }
+        },
+        {
+          "name": "Logistics Estimate",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/pricing/logistics-estimate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"from_city\": \"Mumbai\",\n  \"to_city\": \"Delhi\",\n  \"goods_category\": \"electronics\",\n  \"weight_kg\": 5000,\n  \"transport_mode\": \"road\",\n  \"needs_warehouse\": false,\n  \"goods_value\": 2500000,\n  \"is_export\": false\n}" }
+          }
+        },
+        {
+          "name": "Multi-Modal Estimate",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/pricing/multi-modal-estimate",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"origin\": \"Mumbai\",\n  \"destination\": \"Delhi\",\n  \"goods_category\": \"steel\",\n  \"weight_kg\": 50000,\n  \"goods_value\": 10000000,\n  \"segment1\": \"road\",\n  \"segment2\": \"rail\",\n  \"segment3\": \"road\"\n}" }
+          }
+        },
+        {
+          "name": "Get Goods Categories",
+          "request": { "method": "GET", "url": "{{base_url}}/pricing/goods-categories" }
+        },
+        {
+          "name": "Get Vehicle Types",
+          "request": { "method": "GET", "url": "{{base_url}}/pricing/vehicle-types" }
+        },
+        {
+          "name": "Get Transport Modes",
+          "request": { "method": "GET", "url": "{{base_url}}/pricing/transport-modes" }
+        },
+        {
+          "name": "Get GST Rates",
+          "request": { "method": "GET", "url": "{{base_url}}/pricing/gst-rates" }
+        },
+        {
+          "name": "Get HSN Codes",
+          "request": { "method": "GET", "url": "{{base_url}}/pricing/hsn-codes" }
+        }
+      ]
+    },
+    {
+      "name": "Courier Orders",
+      "item": [
+        {
+          "name": "Create Courier Order",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const body = pm.response.json();",
+            "if (body.data && body.data.id) pm.collectionVariables.set('order_id', body.data.id);"
+          ], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/courier/orders",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"sender_name\": \"Rahul Sharma\",\n  \"sender_phone\": \"+919876543210\",\n  \"sender_address\": \"201 Marine Lines, Mumbai\",\n  \"sender_pincode\": \"400001\",\n  \"receiver_name\": \"Priya Mehta\",\n  \"receiver_phone\": \"+919876543211\",\n  \"receiver_address\": \"45 Connaught Place, Delhi\",\n  \"receiver_pincode\": \"110001\",\n  \"weight_kg\": 2.5,\n  \"length_cm\": 30,\n  \"width_cm\": 20,\n  \"height_cm\": 15,\n  \"declared_value\": 5000,\n  \"payment_method\": \"upi\",\n  \"service_type\": \"express\"\n}" }
+          }
+        },
+        {
+          "name": "Get Courier Orders",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/courier/orders?page=1&limit=20", "query": [{"key":"page","value":"1"},{"key":"limit","value":"20"}] } }
+        },
+        {
+          "name": "Get Courier Order by ID",
+          "request": { "method": "GET", "url": "{{base_url}}/courier/orders/{{order_id}}" }
+        },
+        {
+          "name": "Cancel Courier Order",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/courier/orders/{{order_id}}/cancel",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"reason\": \"Address change required\" }" }
+          }
+        },
+        {
+          "name": "Track Courier Order",
+          "request": { "method": "GET", "url": "{{base_url}}/courier/track/{{order_id}}" }
+        }
+      ]
+    },
+    {
+      "name": "Logistics Orders",
+      "item": [
+        {
+          "name": "Create Logistics Order",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const body = pm.response.json();",
+            "if (body.data && body.data.id) pm.collectionVariables.set('order_id', body.data.id);"
+          ], "type": "text/javascript" } }],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/logistics/orders",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"from_city\": \"Mumbai\",\n  \"to_city\": \"Delhi\",\n  \"goods_category\": \"electronics\",\n  \"goods_description\": \"Laptop Computers - 50 units\",\n  \"weight_kg\": 5000,\n  \"transport_mode\": \"road\",\n  \"needs_warehouse\": false,\n  \"goods_value\": 2500000,\n  \"is_export\": false,\n  \"pickup_date\": \"2024-07-15\",\n  \"payment_method\": \"pay_later\"\n}" }
+          }
+        },
+        {
+          "name": "Get Logistics Orders",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/logistics/orders?page=1&limit=20", "query": [{"key":"page","value":"1"},{"key":"limit","value":"20"}] } }
+        },
+        {
+          "name": "Get Logistics Order by ID",
+          "request": { "method": "GET", "url": "{{base_url}}/logistics/orders/{{order_id}}" }
+        },
+        {
+          "name": "Cancel Logistics Order",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/logistics/orders/{{order_id}}/cancel",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"reason\": \"Shipment postponed\" }" }
+          }
+        },
+        {
+          "name": "Track Logistics Order",
+          "request": { "method": "GET", "url": "{{base_url}}/logistics/track/{{order_id}}" }
+        }
+      ]
+    },
+    {
+      "name": "Driver",
+      "item": [
+        {
+          "name": "Get Available Orders",
+          "request": { "method": "GET", "url": "{{base_url}}/driver/orders/available" }
+        },
+        {
+          "name": "Get Active Orders",
+          "request": { "method": "GET", "url": "{{base_url}}/driver/orders/active" }
+        },
+        {
+          "name": "Accept Order",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/driver/orders/{{order_id}}/accept",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" }
+          }
+        },
+        {
+          "name": "Reject Order",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/driver/orders/{{order_id}}/reject",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"reason\": \"Out of service area\" }" }
+          }
+        },
+        {
+          "name": "Mark Picked Up",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/driver/orders/{{order_id}}/pickup",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"otp\": \"{{otp}}\" }" }
+          }
+        },
+        {
+          "name": "Mark Delivered",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/driver/orders/{{order_id}}/delivered",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"otp\": \"{{otp}}\", \"signature\": \"base64_signature_here\", \"proof_photo\": \"base64_photo_here\" }" }
+          }
+        },
+        {
+          "name": "Get Driver Navigation",
+          "request": { "method": "GET", "url": "{{base_url}}/driver/orders/{{order_id}}/navigation" }
+        },
+        {
+          "name": "Update Driver Location",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/tracking/driver-location",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"order_id\": \"{{order_id}}\", \"latitude\": 19.0760, \"longitude\": 72.8777, \"accuracy\": 10.0 }" }
+          }
+        },
+        {
+          "name": "Get Driver Wallet",
+          "request": { "method": "GET", "url": "{{base_url}}/driver/wallet" }
+        },
+        {
+          "name": "Get Driver Earnings",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/driver/earnings?period=monthly", "query": [{"key":"period","value":"monthly"}] } }
+        },
+        {
+          "name": "Get Driver Profile",
+          "request": { "method": "GET", "url": "{{base_url}}/driver/profile" }
+        },
+        {
+          "name": "Toggle Online Status",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/driver/toggle-online",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"is_online\": true }" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Create Payment Order",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/payments/create-order",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"order_id\": \"{{order_id}}\", \"amount\": 19520, \"method\": \"upi\" }" }
+          }
+        },
+        {
+          "name": "Verify Payment",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/payments/verify",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"payment_id\": \"PAY_TEST_001\", \"order_id\": \"{{order_id}}\", \"signature\": \"test_signature\" }" }
+          }
+        },
+        {
+          "name": "Get Payment Methods",
+          "request": { "method": "GET", "url": "{{base_url}}/payments/methods" }
+        },
+        {
+          "name": "Get Payment History",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/payments/history?page=1&limit=20", "query": [{"key":"page","value":"1"},{"key":"limit","value":"20"}] } }
+        },
+        {
+          "name": "Get Invoice",
+          "request": { "method": "GET", "url": "{{base_url}}/payments/invoice/{{order_id}}" }
+        }
+      ]
+    },
+    {
+      "name": "Tracking",
+      "item": [
+        {
+          "name": "Track Order",
+          "request": { "method": "GET", "url": "{{base_url}}/tracking/{{order_id}}" }
+        },
+        {
+          "name": "Get Maps Distance",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/tracking/maps/distance?origin=Mumbai&destination=Delhi",
+              "query": [{"key":"origin","value":"Mumbai"},{"key":"destination","value":"Delhi"}]
+            }
+          }
+        },
+        {
+          "name": "Get Maps Route",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/tracking/maps/route?origin=19.0760,72.8777&destination=28.6139,77.2090",
+              "query": [{"key":"origin","value":"19.0760,72.8777"},{"key":"destination","value":"28.6139,77.2090"}]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Dashboard Stats",
+          "request": { "method": "GET", "url": "{{base_url}}/admin/dashboard" }
+        },
+        {
+          "name": "Get All Shipments",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/admin/shipments?page=1&limit=50&status=in_transit", "query": [{"key":"page","value":"1"},{"key":"limit","value":"50"},{"key":"status","value":"in_transit"}] } }
+        },
+        {
+          "name": "Get Courier Orders",
+          "request": { "method": "GET", "url": "{{base_url}}/admin/courier-orders" }
+        },
+        {
+          "name": "Get Logistics Orders",
+          "request": { "method": "GET", "url": "{{base_url}}/admin/logistics-orders" }
+        },
+        {
+          "name": "Get Users",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/admin/users?page=1&limit=50", "query": [{"key":"page","value":"1"},{"key":"limit","value":"50"}] } }
+        },
+        {
+          "name": "Get User by ID",
+          "request": { "method": "GET", "url": "{{base_url}}/admin/users/{{user_id}}" }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/admin/users/{{user_id}}",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{ \"status\": \"active\", \"role\": \"courier_customer\" }" }
+          }
+        },
+        {
+          "name": "Get Drivers",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/admin/drivers?page=1&limit=50", "query": [{"key":"page","value":"1"},{"key":"limit","value":"50"}] } }
+        },
+        {
+          "name": "Get Driver by ID",
+          "request": { "method": "GET", "url": "{{base_url}}/admin/drivers/{{driver_id}}" }
+        },
+        {
+          "name": "Get Warehouses",
+          "request": { "method": "GET", "url": "{{base_url}}/admin/warehouses" }
+        },
+        {
+          "name": "Get Warehouse Details",
+          "request": { "method": "GET", "url": "{{base_url}}/admin/warehouses/{{warehouse_id}}" }
+        },
+        {
+          "name": "Get Warehouse Inventory",
+          "request": { "method": "GET", "url": "{{base_url}}/admin/warehouses/{{warehouse_id}}/inventory" }
+        },
+        {
+          "name": "Get Fleet",
+          "request": { "method": "GET", "url": "{{base_url}}/admin/fleet" }
+        },
+        {
+          "name": "Get Analytics",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/admin/analytics?period=monthly", "query": [{"key":"period","value":"monthly"}] } }
+        },
+        {
+          "name": "Get Payments",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/admin/payments?page=1&limit=50", "query": [{"key":"page","value":"1"},{"key":"limit","value":"50"}] } }
+        },
+        {
+          "name": "Get Reports",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/admin/reports?type=revenue&period=monthly", "query": [{"key":"type","value":"revenue"},{"key":"period","value":"monthly"}] } }
+        },
+        {
+          "name": "Get Audit Logs",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/admin/audit-logs?page=1&limit=100", "query": [{"key":"page","value":"1"},{"key":"limit","value":"100"}] } }
+        },
+        {
+          "name": "Get Security Events",
+          "request": { "method": "GET", "url": "{{base_url}}/admin/security" }
+        }
+      ]
+    }
+  ]
+}
