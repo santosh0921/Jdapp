@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:jd_style_logistics/core/auth/token_manager.dart';
 import 'package:jd_style_logistics/models/user_model.dart';
 import 'package:jd_style_logistics/services/auth_service.dart';
-import 'package:jd_style_logistics/core/constants/mock_config.dart';
 import 'package:jd_style_logistics/core/network/api_exception.dart';
 import 'package:jd_style_logistics/core/storage/secure_storage_service.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
@@ -88,22 +87,15 @@ class AuthProvider extends ChangeNotifier {
       _selectedServiceType = _serviceTypeForRole(_lastRole);
 
       if (token != null && token.isNotEmpty && role != null && role.isNotEmpty) {
-        if (MockConfig.enabled) {
-          _user = UserModel.fromJson(
-            MockConfig.mockUser(role: _normalizeRole(role)),
-          );
+        try {
+          final data = await AuthService.instance.getProfile();
+          _user = UserModel.fromJson(data['data'] as Map<String, dynamic>);
+          _selectedRole = _normalizeRole(_user?.role ?? role);
+          _lastRole = _selectedRole;
           _status = AuthStatus.authenticated;
-        } else {
-          try {
-            final data = await AuthService.instance.getProfile();
-            _user = UserModel.fromJson(data['data'] as Map<String, dynamic>);
-            _selectedRole = _normalizeRole(_user?.role ?? role);
-            _lastRole = _selectedRole;
-            _status = AuthStatus.authenticated;
-          } catch (_) {
-            _user = null;
-            _status = AuthStatus.unauthenticated;
-          }
+        } catch (_) {
+          _user = null;
+          _status = AuthStatus.unauthenticated;
         }
       } else {
         _user = null;
@@ -186,15 +178,11 @@ class AuthProvider extends ChangeNotifier {
       final token = payload['token'] as String;
       final user = UserModel.fromJson(payload['user'] as Map<String, dynamic>);
 
-      final String finalRole;
-      if (MockConfig.enabled) {
-        // Trust _selectedRole — mock API always returns 'customer' as role.
-        finalRole = _normalizeRole(_selectedRole ?? 'courier_customer');
-      } else {
-        finalRole = _normalizeRole(
-          user.role.isNotEmpty ? user.role : _selectedRole!,
-        );
-      }
+      // Backend returns generic 'customer' for new users — preserve _selectedRole.
+      final backendRole = _normalizeRole(user.role.isNotEmpty ? user.role : 'courier_customer');
+      final finalRole = (backendRole == 'courier_customer' && _selectedRole != null)
+          ? _normalizeRole(_selectedRole!)
+          : backendRole;
 
       await SecureStorageService.instance.saveAccessToken(token);
       await SecureStorageService.instance.saveUserId(user.id);
@@ -231,16 +219,15 @@ class AuthProvider extends ChangeNotifier {
       final data = await AuthService.instance.setupProfile(name, email);
       final rawUser = UserModel.fromJson(data['data'] as Map<String, dynamic>);
 
-      final String role;
-      if (MockConfig.enabled) {
-        role = _normalizeRole(_selectedRole ?? _lastRole ?? 'courier_customer');
-      } else {
-        role = _normalizeRole(
-          rawUser.role.isNotEmpty
-              ? rawUser.role
-              : _selectedRole ?? _lastRole ?? 'courier_customer',
-        );
-      }
+      // Same logic as verifyOtp: backend 'customer' → defer to _selectedRole.
+      final rawRole = _normalizeRole(
+        rawUser.role.isNotEmpty ? rawUser.role : 'courier_customer',
+      );
+      final role = (rawRole == 'courier_customer' && _selectedRole != null)
+          ? _normalizeRole(_selectedRole!)
+          : rawRole.isNotEmpty
+              ? rawRole
+              : _normalizeRole(_lastRole ?? 'courier_customer');
 
       _user = rawUser;
       await SecureStorageService.instance.saveUserRole(role);

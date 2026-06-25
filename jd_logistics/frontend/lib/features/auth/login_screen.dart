@@ -1046,7 +1046,7 @@ class _MobileOtpForm extends StatelessWidget {
           const SizedBox(height: 18),
           Center(
             child: _SoftBadge(
-              text: isAdmin ? 'Admin OTP required' : 'Mock mode — use OTP: 123456',
+              text: isAdmin ? 'Admin OTP required' : 'Enter the OTP sent to your phone',
             ),
           ),
           const SizedBox(height: 18),

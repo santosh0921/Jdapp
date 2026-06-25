@@ -14,7 +14,6 @@ import 'package:jd_style_logistics/core/widgets/gradient_background.dart';
 import 'package:jd_style_logistics/providers/theme_provider.dart';
 import 'package:jd_style_logistics/providers/auth_provider.dart';
 
-const _kMockOtp = '123456';
 
 class OtpScreen extends StatefulWidget {
   final String phone;
@@ -210,17 +209,21 @@ void _resendOtp() {
 
     HapticFeedback.mediumImpact();
 
-    await Future.delayed(const Duration(milliseconds: 650));
+    if (!mounted) return;
+
+    final auth = context.read<AuthProvider>();
+    final phone = Uri.decodeComponent(widget.phone);
+    final ok = await auth.verifyOtp(phone, _otp);
 
     if (!mounted) return;
 
     setState(() => _verifying = false);
 
-    if (_otp == _kMockOtp) {
+    if (ok) {
       await _playCelebration();
     } else {
       setState(() {
-        _errorMessage = 'Incorrect OTP. Use $_kMockOtp for testing.';
+        _errorMessage = auth.error ?? 'Incorrect OTP. Please try again.';
       });
       _shakeCtrl.forward(from: 0);
       HapticFeedback.heavyImpact();
@@ -836,8 +839,6 @@ class _OtpFormCard extends StatelessWidget {
                     ),
                   ),
           ),
-          const SizedBox(height: 16),
-          const Center(child: _SoftBadge(text: 'Test OTP: 123456')),
           const SizedBox(height: 16),
           Center(
             child: Wrap(
