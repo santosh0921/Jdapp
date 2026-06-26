@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:jd_style_logistics/providers/theme_provider.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
+import 'package:jd_style_logistics/services/pricing_service.dart';
 import '../../core/data/logistics_mock_data.dart';
 
 const Color _kTeal = Color(0xFF0D9488);
@@ -28,6 +29,7 @@ class _LogisticsFreightQuoteScreenState extends State<LogisticsFreightQuoteScree
   LPricingResult? _result;
   LVehicle? _vehicle;
   bool _calculated = false;
+  bool _calculating = false;
 
   @override
   void initState() {
@@ -42,30 +44,50 @@ class _LogisticsFreightQuoteScreenState extends State<LogisticsFreightQuoteScree
     super.dispose();
   }
 
-  void _calculate() {
+  Future<void> _calculate() async {
     final g = _selectedGoods;
-    if (g == null) return;
+    if (g == null || _calculating) return;
+
+    setState(() { _calculating = true; _calculated = false; });
+
     final rawWeight = double.tryParse(_weightCtrl.text) ?? 25;
-    final weightKg = LogisticsMockData.toKg(rawWeight, _weightUnit);
-    final weightTons = LogisticsMockData.toTons(weightKg);
+    final weightKg  = LogisticsMockData.toKg(rawWeight, _weightUnit);
     final goodsValue = double.tryParse(_valueCtrl.text) ?? 2000000;
-    final veh = LogisticsMockData.recommendVehicle(
-      weightTons: weightTons,
-      shipmentType: _mode,
-      classType: g.classType,
-      isUrgent: _mode == 'air',
-    );
-    _vehicle = veh;
-    _result = LogisticsMockData.calculateFreight(
-      goods: g,
-      weightKg: weightKg,
-      distanceKm: LogisticsMockData.estimateDistance(_fromCity, _toCity),
-      vehicle: veh,
-      isExport: true,
-      needsWarehouse: _needsWarehouse,
-      goodsValue: goodsValue,
-    );
-    setState(() => _calculated = true);
+
+    try {
+      final data = await PricingService.instance.estimateLogistics({
+        'from_city': _fromCity,
+        'to_city': _toCity,
+        'goods_id': g.id,
+        'weight_kg': weightKg,
+        'goods_value': goodsValue,
+        'transport_mode': _mode,
+        'needs_warehouse': _needsWarehouse,
+        'shipment_type': 'export',
+      });
+      _result = LPricingResult.fromMap(data);
+      final vehType = data['recommended_vehicle'] as String? ?? '';
+      _vehicle = LogisticsMockData.vehicles.where((v) => v.type == vehType).firstOrNull
+          ?? LogisticsMockData.recommendVehicle(
+              weightTons: LogisticsMockData.toTons(weightKg),
+              shipmentType: _mode,
+              classType: g.classType,
+              isUrgent: _mode == 'air');
+    } catch (_) {
+      final weightTons = LogisticsMockData.toTons(weightKg);
+      _vehicle = LogisticsMockData.recommendVehicle(
+        weightTons: weightTons, shipmentType: _mode,
+        classType: g.classType, isUrgent: _mode == 'air',
+      );
+      _result = LogisticsMockData.calculateFreight(
+        goods: g, weightKg: weightKg,
+        distanceKm: LogisticsMockData.estimateDistance(_fromCity, _toCity),
+        vehicle: _vehicle!, isExport: true,
+        needsWarehouse: _needsWarehouse, goodsValue: goodsValue,
+      );
+    }
+
+    if (mounted) setState(() { _calculating = false; _calculated = true; });
   }
 
   @override
@@ -121,23 +143,27 @@ class _LogisticsFreightQuoteScreenState extends State<LogisticsFreightQuoteScree
 
             // Calculate button
             GestureDetector(
-              onTap: _calculate,
+              onTap: _calculating ? null : _calculate,
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [_kSaffron, Color(0xFFE05500)]),
+                  gradient: LinearGradient(colors: _calculating
+                      ? [const Color(0xFF999999), const Color(0xFF777777)]
+                      : const [_kSaffron, Color(0xFFE05500)]),
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [BoxShadow(color: _kSaffron.withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 4))],
                 ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.calculate_outlined, color: Colors.white, size: 20),
-                    SizedBox(width: 8),
-                    Text('Calculate Freight Quote', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
-                  ],
-                ),
+                child: _calculating
+                    ? const Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)))
+                    : const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.calculate_outlined, color: Colors.white, size: 20),
+                          SizedBox(width: 8),
+                          Text('Calculate Freight Quote', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
+                        ],
+                      ),
               ),
             ),
 

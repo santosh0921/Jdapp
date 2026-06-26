@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
 import 'package:jd_style_logistics/core/widgets/glass_card.dart';
+import 'package:jd_style_logistics/services/warehouse_service.dart';
 
 class ParcelScanScreen extends StatefulWidget {
   const ParcelScanScreen({super.key});
@@ -16,7 +17,7 @@ class _ParcelScanScreenState extends State<ParcelScanScreen>
   final _ctrl = TextEditingController();
   late final AnimationController _pulseCtrl;
   bool _scanning = false;
-  Map<String, String>? _scannedResult;
+  Map<String, dynamic>? _scannedResult;
   String? _errorMsg;
 
   @override
@@ -35,7 +36,7 @@ class _ParcelScanScreenState extends State<ParcelScanScreen>
     super.dispose();
   }
 
-  void _scan() {
+  Future<void> _scan() async {
     final input = _ctrl.text.trim();
     if (input.isEmpty) return;
 
@@ -46,19 +47,35 @@ class _ParcelScanScreenState extends State<ParcelScanScreen>
       _errorMsg = null;
     });
 
-    Future.delayed(const Duration(milliseconds: 800), () {
+    try {
+      final result = await WarehouseService.instance.scan(input, 'check');
       if (!mounted) return;
-      final found = _mockDb[input];
+      if (result.isEmpty) {
+        setState(() {
+          _scanning = false;
+          _errorMsg = 'Parcel "$input" not found in system.';
+        });
+      } else {
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _scanning = false;
+          _scannedResult = {
+            'id':          result['tracking_id']    ?? result['id']               ?? input,
+            'type':        result['package_type']   ?? result['type']             ?? 'Unknown',
+            'origin':      result['origin']         ?? result['pickup_address']   ?? '—',
+            'destination': result['destination']    ?? result['delivery_address'] ?? '—',
+            'weight':      '${result['weight_kg']   ?? result['weight']          ?? '—'} kg',
+            'status':      result['status']         ?? 'Unknown',
+          };
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
       setState(() {
         _scanning = false;
-        if (found != null) {
-          _scannedResult = found;
-          HapticFeedback.mediumImpact();
-        } else {
-          _errorMsg = 'Parcel "$input" not found in system.';
-        }
+        _errorMsg = 'Parcel "$input" not found in system.';
       });
-    });
+    }
   }
 
   void _clear() {
@@ -353,32 +370,6 @@ class _ParcelScanScreenState extends State<ParcelScanScreen>
     ];
   }
 
-  static const _mockDb = {
-    'IN-0041': {
-      'id': 'IN-0041',
-      'origin': 'Mumbai Hub',
-      'destination': 'Bengaluru WH-001',
-      'weight': '3.2 kg',
-      'status': 'Arriving',
-      'type': 'Electronics',
-    },
-    'IN-0042': {
-      'id': 'IN-0042',
-      'origin': 'Delhi Hub',
-      'destination': 'Bengaluru WH-001',
-      'weight': '1.5 kg',
-      'status': 'Arrived',
-      'type': 'Apparel',
-    },
-    'JD-2024-001': {
-      'id': 'JD-2024-001',
-      'origin': 'Mumbai',
-      'destination': 'Bengaluru',
-      'weight': '2.0 kg',
-      'status': 'In Transit',
-      'type': 'Documents',
-    },
-  };
 
   static const _recentScans = [
     {'id': 'IN-0040', 'type': 'Apparel', 'time': '1:10 PM', 'status': 'Stored'},
@@ -421,7 +412,7 @@ class _CornerPainter extends CustomPainter {
 }
 
 class _ResultCard extends StatelessWidget {
-  final Map<String, String> data;
+  final Map<String, dynamic> data;
   final bool isDark;
   final VoidCallback onDismiss;
 
@@ -450,7 +441,7 @@ class _ResultCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      data['id']!,
+                      data['id']?.toString() ?? '—',
                       style: TextStyle(
                         color: isDark ? Colors.white : AppColors.textDark,
                         fontSize: 16,
@@ -458,7 +449,7 @@ class _ResultCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      data['type']!,
+                      data['type']?.toString() ?? '—',
                       style: TextStyle(
                         color: isDark
                             ? Colors.white54
@@ -477,10 +468,10 @@ class _ResultCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          _Row('Origin', data['origin']!, isDark),
-          _Row('Destination', data['destination']!, isDark),
-          _Row('Weight', data['weight']!, isDark),
-          _Row('Status', data['status']!, isDark),
+          _Row('Origin',      data['origin']?.toString()      ?? '—', isDark),
+          _Row('Destination', data['destination']?.toString() ?? '—', isDark),
+          _Row('Weight',      data['weight']?.toString()      ?? '—', isDark),
+          _Row('Status',      data['status']?.toString()      ?? '—', isDark),
           const SizedBox(height: 14),
           const Row(
             children: [

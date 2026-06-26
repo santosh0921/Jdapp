@@ -18,10 +18,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   int _rangeIndex = 0;
   Map<String, dynamic> _apiData = {};
 
-  static const _ranges = ['This Week', 'This Month', 'This Year'];
+  static const _ranges   = ['This Week', 'This Month', 'This Year'];
   static const _weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  static const _shipmentData = [12.0, 19.0, 14.0, 24.0, 21.0, 28.0, 16.0];
-  static const _revenueData = [4800.0, 9200.0, 6400.0, 13500.0, 11000.0, 17200.0, 8100.0];
+
+  List<double> get _chartShipmentData {
+    final raw = _apiData['daily_shipments'] as List<dynamic>?;
+    if (raw != null && raw.isNotEmpty) {
+      return raw.take(7).map((e) => (e as num?)?.toDouble() ?? 0.0).toList();
+    }
+    return List.filled(7, 0.0);
+  }
+
+  List<double> get _chartRevenueData {
+    final raw = _apiData['daily_revenue'] as List<dynamic>?;
+    if (raw != null && raw.isNotEmpty) {
+      return raw.take(7).map((e) => (e as num?)?.toDouble() ?? 0.0).toList();
+    }
+    return List.filled(7, 0.0);
+  }
 
   @override
   void initState() {
@@ -42,13 +56,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
 
   String _kpiShipments() {
     final v = (_apiData['shipments_mtd'] as num?)?.toInt();
-    if (v == null) return '144';
+    if (v == null) return '—';
     return v > 1000 ? '${(v / 1000).toStringAsFixed(1)}k' : '$v';
   }
 
   String _kpiRevenue() {
     final v = (_apiData['revenue_mtd'] as num?)?.toDouble();
-    if (v == null) return '₹70.2k';
+    if (v == null) return '—';
     if (v >= 10000000) return '₹${(v / 10000000).toStringAsFixed(2)}Cr';
     if (v >= 100000)   return '₹${(v / 100000).toStringAsFixed(1)}L';
     return '₹${(v / 1000).toStringAsFixed(1)}k';
@@ -56,12 +70,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
 
   String _kpiDrivers() {
     final v = (_apiData['active_drivers'] as num?)?.toInt();
-    return v != null ? '$v' : '18';
+    return v != null ? '$v' : '—';
   }
 
   String _kpiOnTime() {
     final v = (_apiData['on_time_delivery'] as num?)?.toDouble();
-    return v != null ? '${(v * 100).round()}%' : '92%';
+    return v != null ? '${(v * 100).round()}%' : '—';
   }
 
   @override
@@ -151,15 +165,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700)),
                         const Spacer(),
-                        const Text('Total: 144',
-                            style: TextStyle(
+                        Text('Total: ${_kpiShipments()}',
+                            style: const TextStyle(
                                 color: Colors.white54, fontSize: 11)),
                       ]),
                       const SizedBox(height: 20),
                       AnimatedBuilder(
                         animation: _anim,
                         builder: (_, __) => _BarChart(
-                          values: _shipmentData,
+                          values: _chartShipmentData,
                           labels: _weekDays,
                           barColor: AppColors.primary,
                           progress: _anim.value,
@@ -186,8 +200,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                                 color: Colors.white,
                                 fontWeight: FontWeight.w700)),
                         const Spacer(),
-                        const Text('₹70.2k',
-                            style: TextStyle(
+                        Text(_kpiRevenue(),
+                            style: const TextStyle(
                                 color: AppColors.success,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13)),
@@ -196,7 +210,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                       AnimatedBuilder(
                         animation: _anim,
                         builder: (_, __) => _BarChart(
-                          values: _revenueData,
+                          values: _chartRevenueData,
                           labels: _weekDays,
                           barColor: AppColors.success,
                           progress: _anim.value,
@@ -224,11 +238,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                                 fontWeight: FontWeight.w700)),
                       ]),
                       const SizedBox(height: 18),
-                      const _ModeSplitBar(label: 'Road', percent: 0.62, color: AppColors.roadColor),
+                      _ModeSplitBar(
+                        label: 'Road',
+                        percent: (_apiData['mode_road'] as num?)?.toDouble() ?? 0.0,
+                        color: AppColors.roadColor,
+                      ),
                       const SizedBox(height: 10),
-                      const _ModeSplitBar(label: 'Air', percent: 0.25, color: AppColors.airColor),
+                      _ModeSplitBar(
+                        label: 'Air',
+                        percent: (_apiData['mode_air'] as num?)?.toDouble() ?? 0.0,
+                        color: AppColors.airColor,
+                      ),
                       const SizedBox(height: 10),
-                      const _ModeSplitBar(label: 'Ocean', percent: 0.13, color: AppColors.oceanColor),
+                      _ModeSplitBar(
+                        label: 'Ocean',
+                        percent: (_apiData['mode_ocean'] as num?)?.toDouble() ?? 0.0,
+                        color: AppColors.oceanColor,
+                      ),
                     ],
                   ),
                 ),
@@ -250,10 +276,30 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                                 fontWeight: FontWeight.w700)),
                       ]),
                       const SizedBox(height: 14),
-                      const _RouteRow(from: 'Mumbai', to: 'Delhi', count: 32, color: AppColors.primary),
-                      const _RouteRow(from: 'Bengaluru', to: 'Chennai', count: 24, color: AppColors.driverColor),
-                      const _RouteRow(from: 'Delhi', to: 'Kolkata', count: 19, color: AppColors.warehouseColor),
-                      const _RouteRow(from: 'Mumbai', to: 'Dubai', count: 14, color: AppColors.airColor),
+                      ...() {
+                        final routes = _apiData['top_routes'] as List<dynamic>?;
+                        if (routes == null || routes.isEmpty) {
+                          return [
+                            const Center(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                child: Text('No route data yet',
+                                    style: TextStyle(color: Colors.white38, fontSize: 12)),
+                              ),
+                            ),
+                          ];
+                        }
+                        final colors = [AppColors.primary, AppColors.driverColor, AppColors.warehouseColor, AppColors.airColor];
+                        return routes.take(4).toList().asMap().entries.map((e) {
+                          final r = e.value as Map<String, dynamic>;
+                          return _RouteRow(
+                            from: r['from']?.toString() ?? '—',
+                            to: r['to']?.toString() ?? '—',
+                            count: (r['count'] as num?)?.toInt() ?? 0,
+                            color: colors[e.key % colors.length],
+                          );
+                        }).toList();
+                      }(),
                     ],
                   ),
                 ),
@@ -339,7 +385,10 @@ class _BarChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxVal = values.reduce((a, b) => a > b ? a : b);
+    final maxVal = values.fold(0.0, (m, v) => v > m ? v : m);
+    if (maxVal == 0) {
+      return SizedBox(height: height);
+    }
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       crossAxisAlignment: CrossAxisAlignment.end,

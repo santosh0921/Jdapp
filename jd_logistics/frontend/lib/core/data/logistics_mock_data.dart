@@ -95,6 +95,26 @@ class LPricingResult {
   });
 
   double get subTotal => totalAmount - gstAmount;
+
+  factory LPricingResult.fromMap(Map<String, dynamic> m) {
+    return LPricingResult(
+      baseFreight:           (m['base_freight']          as num?)?.toDouble() ?? 0.0,
+      distanceCost:          (m['distance_cost']         as num?)?.toDouble() ?? 0.0,
+      weightCost:            (m['weight_cost']           as num?)?.toDouble() ?? 0.0,
+      vehicleCost:           (m['vehicle_cost']          as num?)?.toDouble() ?? 0.0,
+      riskCost:              (m['risk_cost']             as num?)?.toDouble() ?? 0.0,
+      handlingCharges:       (m['handling_charges']      as num?)?.toDouble() ?? 0.0,
+      insurancePremium:      (m['insurance_premium']     as num?)?.toDouble() ?? 0.0,
+      warehouseCharges:      (m['warehouse_charges']     as num?)?.toDouble() ?? 0.0,
+      documentationCharges:  (m['documentation_charges'] as num?)?.toDouble() ?? 0.0,
+      customsCharges:        (m['customs_charges']       as num?)?.toDouble() ?? 0.0,
+      gstAmount:             (m['gst_amount']            as num?)?.toDouble() ?? 0.0,
+      totalAmount:           (m['total_amount']          as num?)?.toDouble() ?? 0.0,
+      vehicleRecommended:    m['recommended_vehicle']    as String? ?? 'Truck',
+      riskLevel:             m['risk_level']             as String? ?? 'normal',
+      insuranceCoverage:     (m['insurance_coverage']    as num?)?.toDouble() ?? 0.0,
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

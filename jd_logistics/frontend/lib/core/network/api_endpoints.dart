@@ -67,6 +67,7 @@ class ApiEndpoints {
   // ── Pricing Engine ────────────────────────────────────────────────────────
   static const String pricingCourierEstimate   = '/pricing/courier-estimate';
   static const String pricingLogisticsEstimate = '/pricing/logistics-estimate';
+  static const String pricingMultiModal        = '/pricing/multi-modal';
 
   // ── Payments ──────────────────────────────────────────────────────────────
   static const String createPaymentOrder = '/payments/create-order';

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:jd_style_logistics/providers/theme_provider.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
+import 'package:jd_style_logistics/services/pricing_service.dart';
 import '../../core/data/logistics_mock_data.dart';
 
 const Color _kTeal = Color(0xFF0D9488);
@@ -39,6 +40,7 @@ class _LogisticsOrderScreenState extends State<LogisticsOrderScreen>
   LPricingResult? _pricing;
   LVehicle? _vehicle;
   List<Map<String, String>> _recommendations = [];
+  bool _calculating = false;
 
   @override
   void initState() {
@@ -57,11 +59,11 @@ class _LogisticsOrderScreenState extends State<LogisticsOrderScreen>
     super.dispose();
   }
 
-  void _nextStep() {
+  Future<void> _nextStep() async {
     if (_step < 3) {
-      if (_step == 2) _calculateFreight();
+      if (_step == 2) await _calculateFreight();
       _anim.reset();
-      setState(() => _step++);
+      if (mounted) setState(() => _step++);
       _anim.forward();
     }
   }
@@ -74,36 +76,60 @@ class _LogisticsOrderScreenState extends State<LogisticsOrderScreen>
     }
   }
 
-  void _calculateFreight() {
+  Future<void> _calculateFreight() async {
     final g = _selectedGoods;
     if (g == null) return;
-    final rawWeight = double.tryParse(_weightCtrl.text) ?? 500;
-    final weightKg = LogisticsMockData.toKg(rawWeight, _weightUnit);
-    final weightTons = LogisticsMockData.toTons(weightKg);
+
+    if (mounted) setState(() => _calculating = true);
+
+    final rawWeight  = double.tryParse(_weightCtrl.text) ?? 500;
+    final weightKg   = LogisticsMockData.toKg(rawWeight, _weightUnit);
     final goodsValue = double.tryParse(_valueCtrl.text) ?? 500000;
-    final isUrgent = _transportMode == 'air';
-    final veh = LogisticsMockData.recommendVehicle(
-      weightTons: weightTons,
-      shipmentType: _transportMode,
-      classType: g.classType,
-      isUrgent: isUrgent,
-    );
-    _vehicle = veh;
-    _pricing = LogisticsMockData.calculateFreight(
-      goods: g,
-      weightKg: weightKg,
-      distanceKm: LogisticsMockData.estimateDistance('Mumbai', 'Rotterdam'),
-      vehicle: veh,
-      isExport: _shipmentType == 'Export',
-      needsWarehouse: _needsWarehouse,
-      goodsValue: goodsValue,
-    );
-    _recommendations = LogisticsMockData.aiRecommendations(
-      goods: g,
-      weightKg: weightKg,
-      shipmentType: _transportMode,
-      isUrgent: isUrgent,
-    );
+    final isUrgent   = _transportMode == 'air';
+
+    try {
+      final data = await PricingService.instance.estimateLogistics({
+        'goods_id': g.id,
+        'weight_kg': weightKg,
+        'goods_value': goodsValue,
+        'transport_mode': _transportMode,
+        'needs_warehouse': _needsWarehouse,
+        'shipment_type': _shipmentType.toLowerCase(),
+      });
+      _pricing = LPricingResult.fromMap(data);
+      final vehType = data['recommended_vehicle'] as String? ?? '';
+      _vehicle = LogisticsMockData.vehicles.where((v) => v.type == vehType).firstOrNull
+          ?? LogisticsMockData.recommendVehicle(
+              weightTons: LogisticsMockData.toTons(weightKg),
+              shipmentType: _transportMode,
+              classType: g.classType,
+              isUrgent: isUrgent);
+      _recommendations = data['ai_recommendations'] != null
+          ? List<Map<String, String>>.from(
+              (data['ai_recommendations'] as List<dynamic>)
+                  .map((e) => Map<String, String>.from(e as Map)))
+          : LogisticsMockData.aiRecommendations(
+              goods: g, weightKg: weightKg,
+              shipmentType: _transportMode, isUrgent: isUrgent);
+    } catch (_) {
+      final weightTons = LogisticsMockData.toTons(weightKg);
+      _vehicle = LogisticsMockData.recommendVehicle(
+        weightTons: weightTons, shipmentType: _transportMode,
+        classType: g.classType, isUrgent: isUrgent,
+      );
+      _pricing = LogisticsMockData.calculateFreight(
+        goods: g, weightKg: weightKg,
+        distanceKm: LogisticsMockData.estimateDistance('Mumbai', 'Rotterdam'),
+        vehicle: _vehicle!, isExport: _shipmentType == 'Export',
+        needsWarehouse: _needsWarehouse, goodsValue: goodsValue,
+      );
+      _recommendations = LogisticsMockData.aiRecommendations(
+        goods: g, weightKg: weightKg,
+        shipmentType: _transportMode, isUrgent: isUrgent,
+      );
+    }
+
+    if (mounted) setState(() => _calculating = false);
   }
 
   @override

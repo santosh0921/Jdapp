@@ -130,8 +130,6 @@ class _JwtInterceptor extends Interceptor {
   static const _publicPaths = {
     ApiEndpoints.sendOtp,
     ApiEndpoints.verifyOtp,
-    ApiEndpoints.adminLogin,
-    ApiEndpoints.adminVerifyOtp,
     ApiEndpoints.refreshToken,
   };
 
