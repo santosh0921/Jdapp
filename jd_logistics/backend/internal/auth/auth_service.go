@@ -29,25 +29,32 @@ func NewService(db *gorm.DB, rdb *redis.Client, cfg *config.Config) *Service {
 }
 
 // SendOTP generates and stores a 6-digit OTP for the given phone number.
+// DB is always the source of truth; Redis is an optional cache.
 func (s *Service) SendOTP(phone string) error {
+	phone = utils.SanitizePhone(phone)
 	if !utils.ValidatePhone(phone) {
 		return errors.New("invalid phone number")
 	}
 
 	otp := fmt.Sprintf("%06d", mathrand.Intn(1000000))
+	expiry := time.Duration(s.cfg.OTPExpiry) * time.Second
 
-	ctx := context.Background()
-	key := "otp:" + phone
-	if err := s.rdb.Set(ctx, key, otp, time.Duration(s.cfg.OTPExpiry)*time.Second).Err(); err != nil {
-		// Redis unavailable: fallback to DB
-		s.db.Where("phone = ? AND used = false", phone).Delete(&OTPRecord{})
-		record := OTPRecord{
-			Phone:     phone,
-			OTP:       otp,
-			ExpiresAt: time.Now().Add(time.Duration(s.cfg.OTPExpiry) * time.Second),
-		}
-		s.db.Create(&record)
+	// Invalidate any previous unused OTPs for this phone
+	s.db.Where("phone = ? AND used = false", phone).Delete(&OTPRecord{})
+
+	// Always persist to DB — this is the source of truth
+	record := OTPRecord{
+		Phone:     phone,
+		OTP:       otp,
+		ExpiresAt: time.Now().Add(expiry),
 	}
+	if err := s.db.Create(&record).Error; err != nil {
+		return fmt.Errorf("save OTP: %w", err)
+	}
+
+	// Best-effort Redis cache — failure does NOT block OTP delivery
+	ctx := context.Background()
+	s.rdb.Set(ctx, "otp:"+phone, otp, expiry)
 
 	// TODO: integrate SMS provider (MSG91 / Fast2SMS / Twilio)
 	fmt.Printf("[DEV] OTP for %s: %s\n", phone, otp)
@@ -55,8 +62,10 @@ func (s *Service) SendOTP(phone string) error {
 }
 
 // VerifyOTP validates the OTP and returns the user + tokens.
-// The OTP is only consumed AFTER user and token creation succeed in the same transaction.
+// DB is always the source of truth. OTP is only consumed after all downstream
+// steps succeed inside a single transaction.
 func (s *Service) VerifyOTP(phone, otp string) (*User, string, string, error) {
+	phone = utils.SanitizePhone(phone)
 	if !utils.ValidatePhone(phone) {
 		return nil, "", "", errors.New("invalid phone number")
 	}
@@ -64,62 +73,41 @@ func (s *Service) VerifyOTP(phone, otp string) (*User, string, string, error) {
 		return nil, "", "", errors.New("invalid OTP format")
 	}
 
-	phone = utils.SanitizePhone(phone)
-	fmt.Printf("[AUTH] VerifyOTP: validating OTP for phone=%s\n", phone)
+	fmt.Printf("[AUTH] VerifyOTP: phone=%s\n", phone)
 
-	ctx := context.Background()
-	key := "otp:" + phone
-
-	var useRedis bool
-	var dbRecord *OTPRecord
-
-	stored, redisErr := s.rdb.Get(ctx, key).Result()
-	if redisErr == nil {
-		// Redis has the OTP — validate but do NOT delete yet
-		if stored != otp {
-			fmt.Printf("[AUTH] VerifyOTP: incorrect OTP (Redis) for phone=%s\n", phone)
-			return nil, "", "", errors.New("incorrect OTP")
-		}
-		useRedis = true
-		fmt.Printf("[AUTH] VerifyOTP: OTP validated from Redis for phone=%s\n", phone)
-	} else {
-		// Redis miss — check DB
-		fmt.Printf("[AUTH] VerifyOTP: Redis miss, checking DB for phone=%s\n", phone)
-		var record OTPRecord
-		if dbErr := s.db.Where("phone = ? AND expires_at > ?", phone, time.Now()).
-			Order("created_at desc").First(&record).Error; dbErr != nil {
-			return nil, "", "", errors.New("OTP not found or expired. Please request a new OTP")
-		}
-		if record.Used {
-			fmt.Printf("[AUTH] VerifyOTP: OTP already used for phone=%s record_id=%d\n", phone, record.ID)
+	// DB is the source of truth — always query it regardless of Redis state
+	var record OTPRecord
+	if err := s.db.Where(
+		"phone = ? AND otp = ? AND used = false AND expires_at > ?",
+		phone, otp, time.Now(),
+	).Order("created_at desc").First(&record).Error; err != nil {
+		// Distinguish "already used" so the client gets a clear message
+		var used OTPRecord
+		if s.db.Where("phone = ? AND otp = ? AND used = true", phone, otp).
+			First(&used).Error == nil {
+			fmt.Printf("[AUTH] VerifyOTP: OTP already used phone=%s record_id=%d\n", phone, used.ID)
 			return nil, "", "", errors.New("OTP already used. Please request a new OTP")
 		}
-		if record.OTP != otp {
-			fmt.Printf("[AUTH] VerifyOTP: incorrect OTP (DB) for phone=%s\n", phone)
-			return nil, "", "", errors.New("incorrect OTP")
-		}
-		dbRecord = &record
-		fmt.Printf("[AUTH] VerifyOTP: OTP found in DB for phone=%s record_id=%d\n", phone, record.ID)
+		fmt.Printf("[AUTH] VerifyOTP: OTP not found or expired phone=%s\n", phone)
+		return nil, "", "", errors.New("OTP not found or expired. Please request a new OTP")
 	}
+	fmt.Printf("[AUTH] VerifyOTP: OTP found in DB phone=%s record_id=%d\n", phone, record.ID)
 
-	// Single atomic transaction: mark OTP used + find/create user + generate tokens.
+	// Single atomic transaction: mark OTP used + find/create user + issue tokens.
 	// If any step fails the transaction rolls back, leaving the OTP reusable.
 	var user User
 	var accessToken, refreshToken string
 
 	txErr := s.db.Transaction(func(tx *gorm.DB) error {
-		// Mark DB OTP used inside the transaction so rollback restores it
-		if dbRecord != nil {
-			fmt.Printf("[AUTH] VerifyOTP: marking OTP used in DB record_id=%d\n", dbRecord.ID)
-			if err := tx.Model(dbRecord).Update("used", true).Error; err != nil {
-				return fmt.Errorf("mark OTP used: %w", err)
-			}
+		fmt.Printf("[AUTH] VerifyOTP: marking OTP used record_id=%d\n", record.ID)
+		if err := tx.Model(&record).Update("used", true).Error; err != nil {
+			return fmt.Errorf("mark OTP used: %w", err)
 		}
 
 		// Find or create user
 		result := tx.Where("phone = ?", phone).First(&user)
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			fmt.Printf("[AUTH] VerifyOTP: creating new user for phone=%s\n", phone)
+			fmt.Printf("[AUTH] VerifyOTP: creating new user phone=%s\n", phone)
 			user = User{Phone: phone}
 			if err := tx.Create(&user).Error; err != nil {
 				return fmt.Errorf("create user: %w", err)
@@ -127,23 +115,19 @@ func (s *Service) VerifyOTP(phone, otp string) (*User, string, string, error) {
 		} else if result.Error != nil {
 			return fmt.Errorf("find user: %w", result.Error)
 		} else {
-			fmt.Printf("[AUTH] VerifyOTP: found existing user id=%d phone=%s\n", user.ID, phone)
+			fmt.Printf("[AUTH] VerifyOTP: existing user id=%d phone=%s\n", user.ID, phone)
 		}
 
-		// Update last_login (non-critical)
 		now := time.Now()
 		tx.Model(&user).Update("last_login", now)
 
-		// Generate access token
-		fmt.Printf("[AUTH] VerifyOTP: generating access token for user_id=%d role=%s\n", user.ID, user.Role)
+		fmt.Printf("[AUTH] VerifyOTP: generating tokens user_id=%d role=%s\n", user.ID, user.Role)
 		var err error
 		accessToken, err = utils.GenerateToken(fmt.Sprint(user.ID), user.Role, s.cfg.JWTSecret)
 		if err != nil {
 			return fmt.Errorf("generate access token: %w", err)
 		}
 
-		// Issue refresh token inside the same transaction
-		fmt.Printf("[AUTH] VerifyOTP: issuing refresh token for user_id=%d\n", user.ID)
 		refreshToken, err = s.issueRefreshTokenTx(tx, user.ID)
 		if err != nil {
 			return fmt.Errorf("issue refresh token: %w", err)
@@ -153,15 +137,13 @@ func (s *Service) VerifyOTP(phone, otp string) (*User, string, string, error) {
 	})
 
 	if txErr != nil {
-		fmt.Printf("[AUTH] VerifyOTP: transaction failed for phone=%s: %v\n", phone, txErr)
+		fmt.Printf("[AUTH] VerifyOTP: transaction failed phone=%s: %v\n", phone, txErr)
 		return nil, "", "", txErr
 	}
 
-	// Delete Redis key only AFTER the DB transaction commits
-	if useRedis {
-		fmt.Printf("[AUTH] VerifyOTP: deleting Redis OTP key for phone=%s\n", phone)
-		s.rdb.Del(ctx, key)
-	}
+	// Best-effort: evict Redis cache entry after successful tx
+	ctx := context.Background()
+	s.rdb.Del(ctx, "otp:"+phone)
 
 	fmt.Printf("[AUTH] VerifyOTP: success user_id=%d phone=%s role=%s\n", user.ID, phone, user.Role)
 	return &user, accessToken, refreshToken, nil
