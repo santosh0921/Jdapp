@@ -15,19 +15,12 @@ class DriversScreen extends StatefulWidget {
 
 class _DriversScreenState extends State<DriversScreen> {
   int _filter = 0;
-  bool _isLoading = false;
+  bool _isLoading = true;
   String? _error;
 
   static const _filters = ['All', 'Online', 'Offline', 'Suspended'];
 
-  List<Map<String, dynamic>> _drivers = const [
-    {'name': 'Ramesh Sharma', 'phone': '+91 98700 12345', 'vehicle': 'Hero Splendor — MH12AB1234', 'deliveries': 147, 'rating': '4.9', 'earnings': '₹18,450', 'status': 'Online'},
-    {'name': 'Suresh Kumar',  'phone': '+91 87600 23456', 'vehicle': 'Honda Activa — KA03CD5678', 'deliveries': 89,  'rating': '4.7', 'earnings': '₹11,200', 'status': 'Online'},
-    {'name': 'Anil Rao',      'phone': '+91 76600 34567', 'vehicle': 'TVS Jupiter — TN09EF9012',  'deliveries': 212, 'rating': '4.8', 'earnings': '₹24,800', 'status': 'Offline'},
-    {'name': 'Priya Devi',    'phone': '+91 65600 45678', 'vehicle': 'Bajaj Pulsar — DL07GH3456', 'deliveries': 54,  'rating': '4.6', 'earnings': '₹6,900',  'status': 'Online'},
-    {'name': 'Karan Singh',   'phone': '+91 54600 56789', 'vehicle': 'Royal Enfield — UP32IJ7890','deliveries': 18,  'rating': '3.8', 'earnings': '₹2,100',  'status': 'Suspended'},
-    {'name': 'Divya Menon',   'phone': '+91 43600 67890', 'vehicle': 'Ather 450X — KL07KL1234',   'deliveries': 76,  'rating': '4.9', 'earnings': '₹9,300',  'status': 'Offline'},
-  ];
+  List<Map<String, dynamic>> _drivers = [];
 
   List<Map<String, dynamic>> get _filtered {
     if (_filter == 0) return _drivers;

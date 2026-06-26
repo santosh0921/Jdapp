@@ -37,20 +37,11 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
 
-  static const _fallback = [
-    _PayRecord(id: 'PAY-8801', customer: 'Rahul Sharma', shipmentId: 'JD-24101', method: 'UPI', amount: 850, status: 'Settled', date: 'Jun 17'),
-    _PayRecord(id: 'PAY-8802', customer: 'Ravi Kumar', shipmentId: 'JD-24101', method: 'Bank', amount: 680, status: 'Pending', date: 'Jun 17', isDriver: true),
-    _PayRecord(id: 'PAY-8803', customer: 'Priya Mehta', shipmentId: 'JD-24102', method: 'Card', amount: 4250, status: 'Settled', date: 'Jun 16'),
-    _PayRecord(id: 'PAY-8804', customer: 'Anil Singh', shipmentId: 'JD-24102', method: 'Bank', amount: 3400, status: 'Pending', date: 'Jun 16', isDriver: true),
-    _PayRecord(id: 'PAY-8805', customer: 'Vikram Nair', shipmentId: 'JD-24103', method: 'Net Banking', amount: 12800, status: 'Settled', date: 'Jun 15'),
-    _PayRecord(id: 'PAY-8806', customer: 'Meena Tiwari', shipmentId: 'JD-24089', method: 'UPI', amount: 320, status: 'Refunded', date: 'Jun 14'),
-    _PayRecord(id: 'PAY-8807', customer: 'Suresh Patel', shipmentId: 'JD-24096', method: 'COD', amount: 540, status: 'Settled', date: 'Jun 12'),
-    _PayRecord(id: 'PAY-8808', customer: 'Vikram D.', shipmentId: 'JD-24096', method: 'Bank', amount: 432, status: 'Settled', date: 'Jun 12', isDriver: true),
-  ];
+  bool _isLoading = true;
+  String? _loadError;
+  List<_PayRecord> _liveRecords = [];
 
-  List<_PayRecord>? _liveRecords;
-
-  List<_PayRecord> get _records => _liveRecords ?? _fallback;
+  List<_PayRecord> get _records => _liveRecords;
 
   double get _revenue => _records
       .where((r) => !r.isDriver && r.status == 'Settled')
@@ -72,27 +63,33 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen>
   }
 
   Future<void> _loadPayments() async {
-    final data = await AdminService.instance.getPayments();
-    if (!mounted || data.isEmpty) return;
-    setState(() {
-      _liveRecords = data.map((m) {
-        final isDriver = m['is_driver_payout'] == true || m['type'] == 'driver_payout';
-        final raw = m['status']?.toString() ?? 'pending';
-        final status = raw[0].toUpperCase() + raw.substring(1);
-        return _PayRecord(
-          id: m['id']?.toString() ?? m['payment_id']?.toString() ?? 'PAY',
-          customer: m['customer_name']?.toString() ?? m['name']?.toString() ?? '—',
-          shipmentId: m['order_id']?.toString() ?? m['shipment_id']?.toString() ?? '—',
-          method: m['payment_method']?.toString() ?? m['method']?.toString() ?? '—',
-          amount: (m['amount'] as num? ?? 0).toDouble(),
-          status: status,
-          date: (m['created_at']?.toString() ?? '').isNotEmpty
-              ? m['created_at'].toString().substring(0, 10)
-              : '—',
-          isDriver: isDriver,
-        );
-      }).toList();
-    });
+    setState(() { _isLoading = true; _loadError = null; });
+    try {
+      final data = await AdminService.instance.getPayments();
+      if (!mounted) return;
+      setState(() {
+        _liveRecords = data.map((m) {
+          final isDriver = m['is_driver_payout'] == true || m['type'] == 'driver_payout';
+          final raw = m['status']?.toString() ?? 'pending';
+          final status = raw[0].toUpperCase() + raw.substring(1);
+          return _PayRecord(
+            id: m['id']?.toString() ?? m['payment_id']?.toString() ?? 'PAY',
+            customer: m['customer_name']?.toString() ?? m['name']?.toString() ?? '—',
+            shipmentId: m['order_id']?.toString() ?? m['shipment_id']?.toString() ?? '—',
+            method: m['payment_method']?.toString() ?? m['method']?.toString() ?? '—',
+            amount: (m['amount'] as num? ?? 0).toDouble(),
+            status: status,
+            date: (m['created_at']?.toString() ?? '').isNotEmpty
+                ? m['created_at'].toString().substring(0, 10)
+                : '—',
+            isDriver: isDriver,
+          );
+        }).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() { _loadError = e.toString(); _isLoading = false; });
+    }
   }
 
   @override
@@ -110,6 +107,37 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_loadError != null) {
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.cloud_off_rounded, size: 48, color: Colors.white54),
+              const SizedBox(height: 16),
+              const Text('Could not load payments', style: TextStyle(color: Colors.white70, fontSize: 15, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Text(_loadError!, style: const TextStyle(color: Colors.white38, fontSize: 12), textAlign: TextAlign.center),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: _loadPayments,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return GradientBackground(
       child: Scaffold(

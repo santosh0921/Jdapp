@@ -15,21 +15,12 @@ class FleetScreen extends StatefulWidget {
 
 class _FleetScreenState extends State<FleetScreen> {
   int _filter = 0;
-  bool _isLoading = false;
+  bool _isLoading = true;
   String? _error;
 
   static const _filters = ['All', 'Active', 'Idle', 'Maintenance'];
 
-  List<Map<String, dynamic>> _vehicles = const [
-    {'reg': 'MH12AB1234', 'type': 'Bike',  'make': 'Hero Splendor+',   'driver': 'Ramesh Sharma', 'km': 12450, 'fuel': 85, 'status': 'Active'},
-    {'reg': 'KA03CD5678', 'type': 'Bike',  'make': 'Honda Activa 6G',  'driver': 'Suresh Kumar',  'km': 8320,  'fuel': 60, 'status': 'Active'},
-    {'reg': 'TN09EF9012', 'type': 'Bike',  'make': 'TVS Jupiter',      'driver': 'Unassigned',    'km': 21000, 'fuel': 30, 'status': 'Idle'},
-    {'reg': 'DL07GH3456', 'type': 'Tempo', 'make': 'Tata Ace Gold',    'driver': 'Vijay Rao',     'km': 54200, 'fuel': 45, 'status': 'Active'},
-    {'reg': 'UP32IJ7890', 'type': 'Van',   'make': 'Mahindra Supro',   'driver': 'Unassigned',    'km': 38000, 'fuel': 0,  'status': 'Maintenance'},
-    {'reg': 'KL07KL1234', 'type': 'Truck', 'make': 'Tata LPT 709',     'driver': 'Mohan Das',     'km': 91000, 'fuel': 70, 'status': 'Active'},
-    {'reg': 'MH04MN5678', 'type': 'Bike',  'make': 'Ather 450X',       'driver': 'Divya Menon',   'km': 4100,  'fuel': 90, 'status': 'Active'},
-    {'reg': 'GJ01OP9012', 'type': 'Tempo', 'make': 'Piaggio Ape City', 'driver': 'Unassigned',    'km': 18600, 'fuel': 55, 'status': 'Idle'},
-  ];
+  List<Map<String, dynamic>> _vehicles = [];
 
   List<Map<String, dynamic>> get _filtered {
     if (_filter == 0) return _vehicles;

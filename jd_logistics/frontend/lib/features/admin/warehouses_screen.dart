@@ -14,16 +14,10 @@ class WarehousesScreen extends StatefulWidget {
 }
 
 class _WarehousesScreenState extends State<WarehousesScreen> {
-  bool _isLoading = false;
+  bool _isLoading = true;
   String? _error;
 
-  List<Map<String, dynamic>> _warehouses = const [
-    {'id': 'WH-001', 'name': 'Bengaluru Central', 'location': 'Whitefield, Bengaluru',    'capacity': 3000, 'used': 2580, 'staff': 12, 'status': 'Operational'},
-    {'id': 'WH-002', 'name': 'Mumbai West Hub',   'location': 'Andheri West, Mumbai',      'capacity': 5000, 'used': 3100, 'staff': 18, 'status': 'Operational'},
-    {'id': 'WH-003', 'name': 'Delhi NCR Depot',   'location': 'Gurugram, Haryana',         'capacity': 4000, 'used': 3680, 'staff': 15, 'status': 'Near Capacity'},
-    {'id': 'WH-004', 'name': 'Hyderabad Hub',     'location': 'Hitech City, Hyderabad',    'capacity': 2500, 'used': 1200, 'staff': 10, 'status': 'Operational'},
-    {'id': 'WH-005', 'name': 'Chennai Port',      'location': 'Koyambedu, Chennai',        'capacity': 3500, 'used': 900,  'staff': 8,  'status': 'Operational'},
-  ];
+  List<Map<String, dynamic>> _warehouses = [];
 
   @override
   void initState() {

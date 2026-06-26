@@ -23,36 +23,8 @@ class _SecurityScreenState extends State<SecurityScreen> {
 
   static const _sessionOptions = ['1 hour', '4 hours', '8 hours', '24 hours', '7 days'];
 
-  static const _activeSessions = [
-    _Session(
-      device: 'Chrome · Windows 11',
-      ip: '192.168.1.42',
-      location: 'Bengaluru, India',
-      since: '2 hours ago',
-      isCurrent: true,
-    ),
-    _Session(
-      device: 'Safari · iPhone 15',
-      ip: '49.36.82.104',
-      location: 'Mumbai, India',
-      since: '1 day ago',
-      isCurrent: false,
-    ),
-    _Session(
-      device: 'Flutter App · Android',
-      ip: '103.24.68.91',
-      location: 'Delhi, India',
-      since: '3 days ago',
-      isCurrent: false,
-    ),
-  ];
-
-  static const _recentEvents = [
-    _SecurityEvent(icon: Icons.login_rounded, label: 'Admin login', sub: '192.168.1.42 · 2h ago', color: 0xFF22C55E),
-    _SecurityEvent(icon: Icons.shield_rounded, label: '2FA verified', sub: '49.36.82.104 · 1d ago', color: 0xFF5EA2FF),
-    _SecurityEvent(icon: Icons.person_off_rounded, label: 'Failed login attempt', sub: '61.91.47.13 · 2d ago', color: 0xFFEF4444),
-    _SecurityEvent(icon: Icons.settings_rounded, label: 'Settings changed', sub: '192.168.1.42 · 3d ago', color: 0xFFFF9F2F),
-  ];
+  List<_Session> _activeSessions = [];
+  List<_SecurityEvent> _recentEvents = [];
 
   @override
   void initState() {
@@ -64,14 +36,35 @@ class _SecurityScreenState extends State<SecurityScreen> {
     final data = await AdminService.instance.getSecurity();
     if (!mounted || data.isEmpty) return;
     setState(() {
-      _twoFactor     = data['two_factor_enabled']  as bool? ?? _twoFactor;
-      _loginAlerts   = data['login_alerts_enabled'] as bool? ?? _loginAlerts;
-      _sessionTimeout= data['session_timeout']      as bool? ?? _sessionTimeout;
-      _ipWhitelist   = data['ip_whitelist_enabled'] as bool? ?? _ipWhitelist;
-      _auditLogging  = data['audit_logging']        as bool? ?? _auditLogging;
-      _deviceTrust   = data['device_trust']         as bool? ?? _deviceTrust;
+      _twoFactor      = data['two_factor_enabled']  as bool? ?? _twoFactor;
+      _loginAlerts    = data['login_alerts_enabled'] as bool? ?? _loginAlerts;
+      _sessionTimeout = data['session_timeout']      as bool? ?? _sessionTimeout;
+      _ipWhitelist    = data['ip_whitelist_enabled'] as bool? ?? _ipWhitelist;
+      _auditLogging   = data['audit_logging']        as bool? ?? _auditLogging;
+      _deviceTrust    = data['device_trust']         as bool? ?? _deviceTrust;
       if (data['session_duration'] != null) {
         _sessionDuration = data['session_duration'].toString();
+      }
+      // Parse active sessions if API provides them
+      final rawSessions = data['active_sessions'] as List<dynamic>?;
+      if (rawSessions != null) {
+        _activeSessions = rawSessions.map((s) => _Session(
+          device:    s['device']?.toString()   ?? 'Unknown device',
+          ip:        s['ip']?.toString()       ?? '—',
+          location:  s['location']?.toString() ?? '—',
+          since:     s['since']?.toString()    ?? '—',
+          isCurrent: s['is_current'] as bool?  ?? false,
+        )).toList();
+      }
+      // Parse recent security events if API provides them
+      final rawEvents = data['recent_events'] as List<dynamic>?;
+      if (rawEvents != null) {
+        _recentEvents = rawEvents.map((e) => _SecurityEvent(
+          icon:  Icons.shield_rounded,
+          label: e['label']?.toString() ?? '—',
+          sub:   e['sub']?.toString()   ?? '—',
+          color: 0xFF5EA2FF,
+        )).toList();
       }
     });
   }
@@ -288,6 +281,23 @@ class _SecurityScreenState extends State<SecurityScreen> {
   }
 
   Widget _buildActiveSessions(bool dark, _Palette p) {
+    if (_activeSessions.isEmpty) {
+      return _ClayCard(
+        dark: dark,
+        p: p,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Row(
+            children: [
+              Icon(Icons.devices_rounded, color: p.sub, size: 20),
+              const SizedBox(width: 10),
+              Text('No active session data available',
+                  style: TextStyle(fontSize: 13, color: p.sub)),
+            ],
+          ),
+        ),
+      );
+    }
     return _ClayCard(
       dark: dark,
       p: p,
@@ -308,10 +318,23 @@ class _SecurityScreenState extends State<SecurityScreen> {
       p: p,
       child: Column(
         children: [
-          for (int i = 0; i < _recentEvents.length; i++) ...[
-            if (i > 0) _divider(p),
-            _EventTile(event: _recentEvents[i], p: p),
-          ],
+          if (_recentEvents.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              child: Row(
+                children: [
+                  Icon(Icons.shield_rounded, color: p.sub, size: 20),
+                  const SizedBox(width: 10),
+                  Text('No recent security events',
+                      style: TextStyle(fontSize: 13, color: p.sub)),
+                ],
+              ),
+            )
+          else
+            for (int i = 0; i < _recentEvents.length; i++) ...[
+              if (i > 0) _divider(p),
+              _EventTile(event: _recentEvents[i], p: p),
+            ],
           _divider(p),
           InkWell(
             onTap: () => context.push('/admin/audit-logs'),

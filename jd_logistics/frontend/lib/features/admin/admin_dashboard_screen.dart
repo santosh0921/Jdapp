@@ -226,9 +226,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                     children: [
                       _StatusPill(label: 'LIVE', color: AppColors.success, dot: true),
                       const SizedBox(width: 8),
-                      _StatusPill(label: '${_i('warehouses_online', 18)} Warehouses Online', color: Colors.white54),
+                      _StatusPill(label: '${_i('warehouses_online', 0)} Warehouses Online', color: Colors.white54),
                       const SizedBox(width: 8),
-                      _StatusPill(label: '${_i('drivers_online', 284)} Drivers Active', color: Colors.white54),
+                      _StatusPill(label: '${_i('online_drivers', 0)} Drivers Active', color: Colors.white54),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -243,7 +243,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                             const Text('Today\'s Revenue',
                                 style: TextStyle(color: Colors.white60, fontSize: 12)),
                             const SizedBox(height: 4),
-                            Text(_fmtCurrency(_d('today_revenue', 284750.0)),
+                            Text(_fmtCurrency(_d('today_revenue', 0)),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 28,
@@ -254,7 +254,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                               children: [
                                 const Icon(Icons.trending_up_rounded, color: AppColors.success, size: 14),
                                 const SizedBox(width: 4),
-                                Text('+${_d('revenue_trend', 14.2).toStringAsFixed(1)}% vs yesterday',
+                                Text('+${_d('revenue_trend', 0).toStringAsFixed(1)}% vs yesterday',
                                     style: const TextStyle(color: AppColors.success, fontSize: 11, fontWeight: FontWeight.w600)),
                               ],
                             ),
@@ -267,7 +267,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                           const Text('Total Shipments Today',
                               style: TextStyle(color: Colors.white60, fontSize: 10)),
                           const SizedBox(height: 2),
-                          Text('${_i('total_shipments_today', 1842)}',
+                          Text('${_i('today_shipments', 0)}',
                               style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -275,7 +275,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                               color: AppColors.success.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Text('+${_d('shipments_trend', 8.7).toStringAsFixed(1)}%',
+                            child: Text('+${_d('shipments_trend', 0).toStringAsFixed(1)}%',
                                 style: const TextStyle(color: AppColors.success, fontSize: 11, fontWeight: FontWeight.w700)),
                           ),
                         ],
@@ -294,16 +294,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ── KPI Grid ─────────────────────────────────────────────────────────────
 
   Widget _buildKpiGrid(bool dark, _Palette p) {
-    final totalShipments = _i('total_shipments_today', 1842);
-    final revenueRaw = _d('mtd_revenue', 28400000);
-    final activeDrivers = _i('active_drivers', 342);
-    final warehousesOnline = _i('warehouses_online', 18);
-    final totalWarehouses = _i('warehouses_total', 20);
-    final totalCustomers = _i('total_customers', 48291);
-    final obcCirculating = _d('obc_circulating', 1284000);
-    final shipmentTrend = _d('shipments_trend', 8.7);
-    final revenueTrend = _d('mtd_revenue_trend', 14.2);
-    final newCustomers = _i('new_customers_today', 214);
+    final totalShipments = _i('today_shipments', 0);
+    final revenueRaw = _d('revenue', 0);
+    final activeDrivers = _i('active_drivers', 0);
+    final warehousesOnline = _i('warehouses_online', 0);
+    final totalWarehouses = _i('warehouses_total', 0);
+    final totalCustomers = _i('total_users', 0);
+    final obcCirculating = _d('obc_circulating', 0);
+    final shipmentTrend = _d('shipments_trend', 0);
+    final revenueTrend = _d('mtd_revenue_trend', 0);
+    final newCustomers = _i('new_customers_today', 0);
 
     final kpis = [
       _Kpi(label: 'Shipments Today', value: '$totalShipments', icon: Icons.local_shipping_rounded, color: 0xFF5EA2FF, trend: '+${shipmentTrend.toStringAsFixed(1)}%', up: true),
@@ -336,94 +336,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ── Shipment Breakdown ────────────────────────────────────────────────────
 
   Widget _buildShipmentBreakdown(bool dark, _Palette p) {
-    const modes = [
-      _Mode(label: 'Road', icon: Icons.local_shipping_rounded, value: '28,420', pct: 0.59, color: 0xFF5EA2FF),
-      _Mode(label: 'Air', icon: Icons.flight_rounded, value: '8,142', pct: 0.17, color: 0xFF22C55E),
-      _Mode(label: 'Sea', icon: Icons.directions_boat_rounded, value: '4,821', pct: 0.10, color: 0xFF8B5CF6),
-      _Mode(label: 'Bike', icon: Icons.delivery_dining_rounded, value: '6,908', pct: 0.14, color: 0xFFFF9F2F),
-    ];
-    const intl = [
-      _Segment(label: 'Domestic', value: 0.73, color: 0xFF5EA2FF),
-      _Segment(label: 'International', value: 0.27, color: 0xFF22C55E),
-    ];
+    final total   = _i('total_shipments', 0);
+    final today   = _i('today_shipments', 0);
+    final pending = _i('pending_orders', 0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionHeader('Shipment Breakdown', Icons.donut_large_rounded, p),
+        Row(
+          children: [
+            Expanded(child: _sectionHeader('Shipment Breakdown', Icons.donut_large_rounded, p)),
+            GestureDetector(
+              onTap: () => context.push('/admin/analytics'),
+              child: Text('Full Analytics', style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
         _ClayCard(dark: dark, p: p, child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
+          child: Row(
             children: [
-              // Domestic vs International
-              Row(
-                children: intl.map((s) => Expanded(
-                  flex: (s.value * 100).round(),
-                  child: Container(
-                    height: 8,
-                    margin: EdgeInsets.only(right: s == intl.last ? 0 : 4),
-                    decoration: BoxDecoration(
-                      color: Color(s.color),
-                      borderRadius: s == intl.first
-                          ? const BorderRadius.horizontal(left: Radius.circular(4))
-                          : const BorderRadius.horizontal(right: Radius.circular(4)),
-                    ),
-                  ),
-                )).toList(),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: intl.map((s) => Expanded(
-                  child: Row(
-                    children: [
-                      Container(width: 8, height: 8, decoration: BoxDecoration(color: Color(s.color), shape: BoxShape.circle)),
-                      const SizedBox(width: 4),
-                      Text('${s.label} ${(s.value * 100).round()}%',
-                          style: TextStyle(fontSize: 11, color: p.sub)),
-                    ],
-                  ),
-                )).toList(),
-              ),
-              const SizedBox(height: 16),
-              // Mode breakdown
-              GridView.count(
-                crossAxisCount: 2,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: 2.8,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                children: modes.map((m) {
-                  final color = Color(m.color);
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: color.withValues(alpha: 0.2)),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(m.icon, color: color, size: 16),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(m.value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: p.text), overflow: TextOverflow.ellipsis),
-                              Text(m.label, style: TextStyle(fontSize: 10, color: p.sub)),
-                            ],
-                          ),
-                        ),
-                        Text('${(m.pct * 100).round()}%',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color)),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
+              Expanded(child: _BreakdownStat(label: 'Total', value: '$total', color: const Color(0xFF5EA2FF), icon: Icons.local_shipping_rounded, p: p)),
+              Container(width: 1, height: 48, color: p.border),
+              Expanded(child: _BreakdownStat(label: 'Today', value: '$today', color: AppColors.success, icon: Icons.today_rounded, p: p)),
+              Container(width: 1, height: 48, color: p.border),
+              Expanded(child: _BreakdownStat(label: 'Pending', value: '$pending', color: AppColors.warning, icon: Icons.hourglass_empty_rounded, p: p)),
             ],
           ),
         )),
@@ -434,11 +372,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ── Fleet Status ──────────────────────────────────────────────────────────
 
   Widget _buildFleetStatus(bool dark, _Palette p) {
-    const statuses = [
-      _FleetStatus(label: 'Active', count: 71, color: 0xFF22C55E, icon: Icons.local_shipping_rounded),
-      _FleetStatus(label: 'Idle', count: 8, color: 0xFF5EA2FF, icon: Icons.hourglass_empty_rounded),
-      _FleetStatus(label: 'Maintenance', count: 5, color: 0xFFFF9F2F, icon: Icons.build_rounded),
-    ];
+    final onlineDrivers = _i('online_drivers', 0);
+    final totalDrivers  = _i('total_drivers', 0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -458,46 +393,83 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           child: Column(
             children: [
               Row(
-                children: statuses.map((s) => Expanded(
-                  child: Container(
-                    margin: EdgeInsets.only(right: s == statuses.last ? 0 : 10),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    decoration: BoxDecoration(
-                      color: Color(s.color).withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(s.icon, color: Color(s.color), size: 20),
-                        const SizedBox(height: 6),
-                        Text('${s.count}',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: p.text)),
-                        Text(s.label, style: TextStyle(fontSize: 10, color: p.sub)),
-                      ],
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.local_shipping_rounded, color: AppColors.success, size: 20),
+                          const SizedBox(height: 6),
+                          Text('$onlineDrivers', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: p.text)),
+                          Text('Online', style: TextStyle(fontSize: 10, color: p.sub)),
+                        ],
+                      ),
                     ),
                   ),
-                )).toList(),
-              ),
-              const SizedBox(height: 14),
-              // Fleet bar
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: Row(
-                  children: statuses.map((s) => Flexible(
-                    flex: s.count,
-                    child: Container(height: 6, color: Color(s.color)),
-                  )).toList(),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('84 total vehicles', style: TextStyle(fontSize: 11, color: p.sub)),
-                  Text('${(71 / 84 * 100).round()}% utilization',
-                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.success)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF5EA2FF).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.hourglass_empty_rounded, color: Color(0xFF5EA2FF), size: 20),
+                          const SizedBox(height: 6),
+                          Text('${totalDrivers - onlineDrivers}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: p.text)),
+                          Text('Offline', style: TextStyle(fontSize: 10, color: p.sub)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF9F2F).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.people_rounded, color: Color(0xFFFF9F2F), size: 20),
+                          const SizedBox(height: 6),
+                          Text('$totalDrivers', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: p.text)),
+                          Text('Total', style: TextStyle(fontSize: 10, color: p.sub)),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
+              const SizedBox(height: 14),
+              if (totalDrivers > 0) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: onlineDrivers / totalDrivers,
+                    backgroundColor: const Color(0xFF5EA2FF).withValues(alpha: 0.2),
+                    color: AppColors.success,
+                    minHeight: 6,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('$totalDrivers registered drivers', style: TextStyle(fontSize: 11, color: p.sub)),
+                    Text('${totalDrivers > 0 ? (onlineDrivers / totalDrivers * 100).round() : 0}% online',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.success)),
+                  ],
+                ),
+              ],
             ],
           ),
         )),
@@ -508,12 +480,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ── Warehouse Status ──────────────────────────────────────────────────────
 
   Widget _buildWarehouseStatus(bool dark, _Palette p) {
-    const warehouses = [
-      _WarehouseStatus(name: 'Bengaluru East', code: 'WH-007', pct: 0.74, status: 'active'),
-      _WarehouseStatus(name: 'Mumbai North', code: 'WH-003', pct: 0.88, status: 'active'),
-      _WarehouseStatus(name: 'Delhi West', code: 'WH-001', pct: 0.61, status: 'active'),
-      _WarehouseStatus(name: 'Chennai South', code: 'WH-009', pct: 0.40, status: 'maintenance'),
-    ];
+    final online = _i('warehouses_online', 0);
+    final total  = _i('total_warehouses', 0);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -528,62 +496,46 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ],
         ),
         const SizedBox(height: 12),
-        _ClayCard(dark: dark, p: p, child: Column(
-          children: warehouses.asMap().entries.map((e) {
-            final i = e.key;
-            final w = e.value;
-            final isMaint = w.status == 'maintenance';
-            final color = isMaint ? AppColors.warning : (w.pct > 0.85 ? AppColors.error : AppColors.success);
-            return Column(
-              children: [
-                if (i > 0) Divider(height: 1, thickness: 1, color: p.border),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                  child: Row(
+        _ClayCard(dark: dark, p: p, child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.warehouse_rounded, color: AppColors.success, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(Icons.warehouse_rounded, color: color, size: 16),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(w.name, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.text), overflow: TextOverflow.ellipsis),
-                            const SizedBox(height: 4),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(3),
-                              child: LinearProgressIndicator(
-                                value: w.pct,
-                                backgroundColor: p.inner,
-                                color: color,
-                                minHeight: 5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text('${(w.pct * 100).round()}%',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
-                          Text(w.code, style: TextStyle(fontSize: 10, color: p.sub)),
-                        ],
-                      ),
+                      Text('$online Online', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: p.text)),
+                      Text(total > 0 ? 'of $total warehouses' : 'warehouses active', style: TextStyle(fontSize: 12, color: p.sub)),
                     ],
                   ),
-                ),
-              ],
-            );
-          }).toList(),
+                  const Spacer(),
+                  if (total > 0) Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text('${(online / total * 100).round()}% online',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.success)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text('Tap "View All" to see individual warehouse details.',
+                  style: TextStyle(fontSize: 11, color: p.sub)),
+            ],
+          ),
         )),
       ],
     );
@@ -592,54 +544,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   // ── Live Activity ─────────────────────────────────────────────────────────
 
   Widget _buildLiveActivity(bool dark, _Palette p) {
-    const events = [
-      _Activity(icon: Icons.check_circle_rounded, color: 0xFF22C55E, text: 'JD-IND-4822 delivered in Mumbai', time: '2m ago'),
-      _Activity(icon: Icons.warning_rounded, color: 0xFFFF9F2F, text: 'JD-IND-4801 delayed — Pune Hub', time: '8m ago'),
-      _Activity(icon: Icons.person_add_rounded, color: 0xFF5EA2FF, text: 'New driver onboarded: Rajesh K.', time: '15m ago'),
-      _Activity(icon: Icons.local_shipping_rounded, color: 0xFF8B5CF6, text: 'Air cargo JD-AIR-091 departed DEL', time: '32m ago'),
-      _Activity(icon: Icons.currency_rupee_rounded, color: 0xFF22C55E, text: 'Driver payout ₹12,400 processed', time: '1h ago'),
-    ];
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionHeader('Live Activity', Icons.bolt_rounded, p),
         const SizedBox(height: 12),
-        _ClayCard(dark: dark, p: p, child: Column(
-          children: events.asMap().entries.map((e) {
-            final i = e.key;
-            final act = e.value;
-            return Column(
-              children: [
-                if (i > 0) Divider(height: 1, thickness: 1, color: p.border),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: Color(act.color).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(act.icon, color: Color(act.color), size: 16),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(act.text,
-                            style: TextStyle(fontSize: 12, color: p.text, fontWeight: FontWeight.w500),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(act.time, style: TextStyle(fontSize: 10, color: p.sub)),
-                    ],
-                  ),
+        _ClayCard(dark: dark, p: p, child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Row(
+            children: [
+              Icon(Icons.bolt_rounded, color: p.sub, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('No recent activity', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.text)),
+                    const SizedBox(height: 4),
+                    Text('Activity feed requires a live event stream from the backend.',
+                        style: TextStyle(fontSize: 11, color: p.sub)),
+                  ],
                 ),
-              ],
-            );
-          }).toList(),
+              ),
+            ],
+          ),
         )),
       ],
     );
@@ -781,6 +709,28 @@ class _NetworkPainter extends CustomPainter {
 }
 
 // ── Sub-widgets ───────────────────────────────────────────────────────────────
+
+class _BreakdownStat extends StatelessWidget {
+  final String label, value;
+  final Color color;
+  final IconData icon;
+  final _Palette p;
+
+  const _BreakdownStat({required this.label, required this.value, required this.color, required this.icon, required this.p});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(height: 6),
+        Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: p.text)),
+        Text(label, style: TextStyle(fontSize: 10, color: p.sub)),
+      ],
+    );
+  }
+}
 
 class _KpiCard extends StatelessWidget {
   final _Kpi kpi;
@@ -949,40 +899,7 @@ class _Kpi {
   const _Kpi({required this.label, required this.value, required this.icon, required this.color, required this.trend, required this.up});
 }
 
-class _Mode {
-  final String label, value;
-  final IconData icon;
-  final double pct;
-  final int color;
-  const _Mode({required this.label, required this.icon, required this.value, required this.pct, required this.color});
-}
 
-class _Segment {
-  final String label;
-  final double value;
-  final int color;
-  const _Segment({required this.label, required this.value, required this.color});
-}
-
-class _FleetStatus {
-  final String label;
-  final int count, color;
-  final IconData icon;
-  const _FleetStatus({required this.label, required this.count, required this.color, required this.icon});
-}
-
-class _WarehouseStatus {
-  final String name, code, status;
-  final double pct;
-  const _WarehouseStatus({required this.name, required this.code, required this.pct, required this.status});
-}
-
-class _Activity {
-  final IconData icon;
-  final int color;
-  final String text, time;
-  const _Activity({required this.icon, required this.color, required this.text, required this.time});
-}
 
 class _Action {
   final IconData icon;

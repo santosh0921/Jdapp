@@ -39,21 +39,10 @@ class _ShipmentsMonitorScreenState extends State<ShipmentsMonitorScreen>
   late final TabController _tabs;
   String _search = '';
 
-  bool _isLoading = false;
+  bool _isLoading = true;
   String? _loadError;
 
-  List<_ShipmentData> _shipments = const [
-    _ShipmentData(id: 'JD-24101', origin: 'Mumbai',    destination: 'Delhi',     status: 'In Transit', mode: 'Road',  eta: 'Jun 20', customer: 'Rahul S.',  progress: 0.55),
-    _ShipmentData(id: 'JD-24102', origin: 'Bengaluru', destination: 'Dubai',     status: 'Customs',    mode: 'Air',   eta: 'Jun 19', customer: 'Priya M.',  progress: 0.72),
-    _ShipmentData(id: 'JD-24103', origin: 'Chennai',   destination: 'Singapore', status: 'In Transit', mode: 'Ocean', eta: 'Jun 25', customer: 'Vikram N.', progress: 0.30),
-    _ShipmentData(id: 'JD-24104', origin: 'Delhi',     destination: 'Kolkata',   status: 'Picked Up',  mode: 'Road',  eta: 'Jun 19', customer: 'Ananya P.', progress: 0.15),
-    _ShipmentData(id: 'JD-24105', origin: 'Hyderabad', destination: 'Mumbai',    status: 'In Transit', mode: 'Air',   eta: 'Jun 18', customer: 'Karthik R.',progress: 0.80),
-    _ShipmentData(id: 'JD-24106', origin: 'Pune',      destination: 'London',    status: 'Delivered',  mode: 'Air',   eta: 'Jun 17', customer: 'Meena T.',  progress: 1.0),
-    _ShipmentData(id: 'JD-24107', origin: 'Ahmedabad', destination: 'Surat',     status: 'Delivered',  mode: 'Road',  eta: 'Jun 16', customer: 'Suresh K.', progress: 1.0),
-    _ShipmentData(id: 'JD-24108', origin: 'Jaipur',    destination: 'Delhi',     status: 'Booked',     mode: 'Road',  eta: 'Jun 21', customer: 'Deepa L.',  progress: 0.0),
-    _ShipmentData(id: 'JD-24109', origin: 'Kochi',     destination: 'Abu Dhabi', status: 'Booked',     mode: 'Air',   eta: 'Jun 22', customer: 'Arjun V.',  progress: 0.0),
-    _ShipmentData(id: 'JD-24110', origin: 'Mumbai',    destination: 'Rotterdam', status: 'Delayed',    mode: 'Ocean', eta: 'Jul 2',  customer: 'Neha B.',   progress: 0.40),
-  ];
+  List<_ShipmentData> _shipments = [];
 
   @override
   void initState() {
