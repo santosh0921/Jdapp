@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
 import 'package:jd_style_logistics/core/utils/helpers.dart';
+import 'package:jd_style_logistics/services/driver_service.dart';
 
 class DriverWalletScreen extends StatefulWidget {
   const DriverWalletScreen({super.key});
@@ -83,15 +84,18 @@ class _DriverWalletScreenState extends State<DriverWalletScreen>
     ),
   ];
 
-  double get _settledBalance => _payouts
-      .where((p) => p.status == 'Settled')
-      .fold(0.0, (sum, item) => sum + item.amount);
+  Map<String, dynamic>? _walletData;
 
-  double get _pendingBalance => _payouts
-      .where((p) => p.status == 'Pending')
-      .fold(0.0, (sum, item) => sum + item.amount);
+  double get _settledBalance =>
+      (_walletData?['balance'] as num?)?.toDouble() ??
+      _payouts.where((p) => p.status == 'Settled').fold(0.0, (sum, item) => sum + item.amount);
+
+  double get _pendingBalance =>
+      (_walletData?['pending_balance'] as num?)?.toDouble() ??
+      _payouts.where((p) => p.status == 'Pending').fold(0.0, (sum, item) => sum + item.amount);
 
   int get _obcBalance =>
+      (_walletData?['obc_points'] as num?)?.toInt() ??
       _payouts.where((p) => p.status == 'Settled').fold(0, (s, p) => s + p.obc);
 
   @override
@@ -109,6 +113,14 @@ class _DriverWalletScreenState extends State<DriverWalletScreen>
       vsync: this,
       duration: const Duration(seconds: 5),
     )..repeat();
+
+    _loadWallet();
+  }
+
+  Future<void> _loadWallet() async {
+    final data = await DriverService.instance.getWallet();
+    if (!mounted || data.isEmpty) return;
+    setState(() => _walletData = data);
   }
 
   @override

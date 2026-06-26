@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
 import 'package:jd_style_logistics/providers/theme_provider.dart';
+import 'package:jd_style_logistics/services/driver_service.dart';
 
 class DeliveryHistoryScreen extends StatefulWidget {
   const DeliveryHistoryScreen({super.key});
@@ -125,10 +126,37 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen>
     ),
   ];
 
+  List<_Delivery>? _liveDeliveries;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    final data = await DriverService.instance.getHistory();
+    if (!mounted || data.isEmpty) return;
+    setState(() {
+      _liveDeliveries = data.map((m) {
+        final raw = m['status']?.toString() ?? 'delivered';
+        final dt = m['created_at']?.toString() ?? '';
+        return _Delivery(
+          id: m['id']?.toString() ?? m['tracking_id']?.toString() ?? '—',
+          recipient: m['customer_name']?.toString() ?? m['recipient']?.toString() ?? '—',
+          address: m['delivery_address']?.toString() ?? '—',
+          date: dt.length >= 10 ? dt.substring(0, 10) : '—',
+          time: dt.length >= 16 ? dt.substring(11, 16) : '—',
+          status: raw.toLowerCase(),
+          distance: m['distance']?.toString() ?? '—',
+          earnings: (m['driver_earnings'] as num? ?? m['amount'] as num? ?? 0).toDouble(),
+          obc: (m['obc_points'] as num? ?? 0).toInt(),
+          weight: '${m['weight'] ?? '—'} kg',
+          payMode: m['payment_method']?.toString() ?? '—',
+        );
+      }).toList();
+    });
   }
 
   @override
@@ -137,18 +165,21 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen>
     super.dispose();
   }
 
+  List<_Delivery> get _source => _liveDeliveries ?? _deliveries;
+
   List<_Delivery> get _filtered {
-    if (_selectedFilter == 'All') return _deliveries;
-    return _deliveries.where((d) => d.status == _selectedFilter.toLowerCase()).toList();
+    if (_selectedFilter == 'All') return _source;
+    return _source.where((d) => d.status == _selectedFilter.toLowerCase()).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final dark = context.watch<ThemeProvider>().isDark;
     final p = _Palette.of(dark);
-    final totalEarnings = _deliveries.fold(0.0, (s, d) => s + d.earnings);
-    final totalObc = _deliveries.fold(0, (s, d) => s + d.obc);
-    final delivered = _deliveries.where((d) => d.status == 'delivered').length;
+    final src = _source;
+    final totalEarnings = src.fold(0.0, (s, d) => s + d.earnings);
+    final totalObc = src.fold(0, (s, d) => s + d.obc);
+    final delivered = src.where((d) => d.status == 'delivered').length;
 
     return Scaffold(
       backgroundColor: p.bg,

@@ -3,8 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
+import 'package:jd_style_logistics/models/driver_model.dart';
+import 'package:jd_style_logistics/providers/driver_provider.dart';
 
 class DriverEarningsScreen extends StatefulWidget {
   const DriverEarningsScreen({super.key});
@@ -31,6 +34,34 @@ class _DriverEarningsScreenState extends State<DriverEarningsScreen>
       vsync: this,
       duration: const Duration(seconds: 5),
     )..repeat();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<DriverProvider>().loadEarnings();
+    });
+  }
+
+  static _TransactionData _fromEarning(EarningModel e) {
+    final isCredit = e.amount >= 0;
+    return _TransactionData(
+      title: e.type == 'delivery'
+          ? 'Delivery Reward'
+          : e.type == 'obc'
+              ? 'OBC Reward'
+              : e.type == 'withdrawal'
+                  ? 'Withdrawal'
+                  : 'Earning',
+      subtitle: e.description ?? e.shipmentId ?? '—',
+      amount: isCredit
+          ? '+₹${e.amount.toStringAsFixed(0)}'
+          : '-₹${e.amount.abs().toStringAsFixed(0)}',
+      time: '${e.createdAt.hour.toString().padLeft(2, '0')}:${e.createdAt.minute.toString().padLeft(2, '0')}',
+      credit: isCredit,
+      icon: e.type == 'obc'
+          ? Icons.monetization_on_rounded
+          : e.type == 'withdrawal'
+              ? Icons.account_balance_rounded
+              : Icons.local_shipping_rounded,
+    );
   }
 
   @override
@@ -138,6 +169,9 @@ class _DriverEarningsScreenState extends State<DriverEarningsScreen>
                             textColor: _text(context),
                             subTextColor: _sub(context),
                             surfaceColor: _surface(context),
+                            live: context.watch<DriverProvider>().earnings.isNotEmpty
+                                ? context.watch<DriverProvider>().earnings.map(_fromEarning).toList()
+                                : null,
                           ),
                         ],
                       ),
@@ -930,11 +964,13 @@ class _TransactionsCard extends StatelessWidget {
   final Color textColor;
   final Color subTextColor;
   final Color surfaceColor;
+  final List<_TransactionData>? live;
 
   const _TransactionsCard({
     required this.textColor,
     required this.subTextColor,
     required this.surfaceColor,
+    this.live,
   });
 
   static const List<_TransactionData> transactions = [
@@ -986,7 +1022,7 @@ class _TransactionsCard extends StatelessWidget {
             subTextColor: subTextColor,
           ),
           const SizedBox(height: 14),
-          ...transactions.map(
+          ...(live ?? transactions).map(
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _TransactionRow(
