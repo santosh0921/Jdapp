@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
+import 'package:jd_style_logistics/core/network/api_exception.dart';
 import 'package:jd_style_logistics/providers/theme_provider.dart';
+import 'package:jd_style_logistics/services/courier_service.dart';
 import 'package:jd_style_logistics/services/payment_service.dart';
 import 'package:provider/provider.dart';
 
@@ -15,6 +17,10 @@ class CourierPaymentArgs {
   final String toCity;
   final String packageType;
   final String partner;
+  final String mode;
+  final String weight;
+  final bool withInsurance;
+  final String notes;
 
   const CourierPaymentArgs({
     required this.orderId,
@@ -23,6 +29,10 @@ class CourierPaymentArgs {
     required this.toCity,
     required this.packageType,
     required this.partner,
+    this.mode = 'road',
+    this.weight = '1 kg',
+    this.withInsurance = false,
+    this.notes = '',
   });
 }
 
@@ -38,10 +48,6 @@ class _CourierPaymentScreenState extends State<CourierPaymentScreen>
     with SingleTickerProviderStateMixin {
   int _selectedMethod = 0;
   bool _paying = false;
-  bool _paymentDone = false;
-
-  late final AnimationController _successCtrl;
-  late final Animation<double> _scaleAnim;
 
   final _upiCtrl = TextEditingController();
 
@@ -49,42 +55,83 @@ class _CourierPaymentScreenState extends State<CourierPaymentScreen>
     {'label': 'UPI',         'icon': Icons.account_balance_wallet_rounded, 'sub': 'Pay via any UPI app'},
     {'label': 'Card',        'icon': Icons.credit_card_rounded,            'sub': 'Credit / Debit card'},
     {'label': 'Net Banking', 'icon': Icons.account_balance_rounded,        'sub': 'All major banks'},
-    {'label': 'JD Wallet',   'icon': Icons.wallet_rounded,                 'sub': 'Balance: ₹2,480'},
-    {'label': 'OBC Points',  'icon': Icons.stars_rounded,                  'sub': '1,240 pts = ₹124'},
+    {'label': 'JD Wallet',   'icon': Icons.wallet_rounded,                 'sub': 'Instant — no OTP needed'},
+    {'label': 'OBC Points',  'icon': Icons.stars_rounded,                  'sub': 'Redeem loyalty points'},
     {'label': 'COD',         'icon': Icons.payments_rounded,               'sub': 'Cash on delivery'},
   ];
 
   @override
-  void initState() {
-    super.initState();
-    _successCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 600));
-    _scaleAnim = CurvedAnimation(parent: _successCtrl, curve: Curves.elasticOut);
-  }
-
-  @override
   void dispose() {
-    _successCtrl.dispose();
     _upiCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _pay() async {
     setState(() => _paying = true);
+    String? errorMsg;
+    String? realOrderId;
+
     try {
-      final order = await PaymentService.instance.createPaymentOrder(
-        orderId: widget.args.orderId,
+      final weightNum = double.tryParse(
+              widget.args.weight.replaceAll(RegExp(r'[^0-9.]'), '')) ??
+          1.0;
+
+      // 1. Create the courier order on the backend.
+      final orderData = await CourierService.instance.createOrder({
+        'pickup_address': widget.args.fromCity,
+        'delivery_address': widget.args.toCity,
+        'package_type': widget.args.packageType,
+        'weight': weightNum,
+        'amount': widget.args.totalAmount,
+        'mode': widget.args.mode,
+        'partner': widget.args.partner,
+        'insurance': widget.args.withInsurance,
+        'payment_method': _methods[_selectedMethod]['label'] as String,
+        if (widget.args.notes.isNotEmpty) 'notes': widget.args.notes,
+      });
+
+      realOrderId = orderData['id']?.toString() ??
+          orderData['tracking_id']?.toString() ??
+          orderData['order_id']?.toString();
+
+      // 2. Create a payment order linked to the courier order.
+      final payData = await PaymentService.instance.createPaymentOrder(
+        orderId: realOrderId ?? widget.args.orderId,
         amount: widget.args.totalAmount,
         method: _methods[_selectedMethod]['label'] as String,
       );
+
+      final paymentId = payData['payment_id'] as String? ??
+          payData['id']?.toString() ??
+          'PAY_${DateTime.now().millisecondsSinceEpoch}';
+
+      // 3. Verify the payment (gateway callback / UPI verify step).
       await PaymentService.instance.verifyPayment(
-        paymentId: order['payment_id'] as String? ?? 'PAY_DEMO',
-        orderId: widget.args.orderId,
+        paymentId: paymentId,
+        orderId: realOrderId ?? widget.args.orderId,
       );
-    } catch (_) {}
+    } catch (e) {
+      errorMsg = e is ApiException ? e.message : e.toString();
+    }
+
     if (!mounted) return;
-    setState(() { _paying = false; _paymentDone = true; });
-    _successCtrl.forward();
+    setState(() => _paying = false);
+
+    if (errorMsg != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMsg),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
+    final ordId = realOrderId ?? widget.args.orderId;
+    context.pushReplacement(
+      '/shipment/delivery-success?id=${Uri.encodeComponent(ordId)}&mode=${widget.args.mode}',
+    );
   }
 
   @override
@@ -106,8 +153,8 @@ class _CourierPaymentScreenState extends State<CourierPaymentScreen>
                 fontWeight: FontWeight.w700,
                 fontSize: 18)),
       ),
-      body: _paymentDone ? _buildSuccess(dark) : _buildForm(dark),
-      bottomNavigationBar: _paymentDone ? null : _buildPayBar(dark),
+      body: _buildForm(dark),
+      bottomNavigationBar: _buildPayBar(dark),
     );
   }
 
@@ -147,22 +194,29 @@ class _CourierPaymentScreenState extends State<CourierPaymentScreen>
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Text(args.fromCity,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15)),
+                    Expanded(
+                      child: Text(args.fromCity,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15)),
+                    ),
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 8),
                       child: Icon(Icons.arrow_forward_rounded,
                           color: Colors.white54, size: 14),
                     ),
-                    Text(args.toCity,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15)),
-                    const Spacer(),
+                    Expanded(
+                      child: Text(args.toCity,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15)),
+                    ),
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
@@ -350,73 +404,6 @@ class _CourierPaymentScreenState extends State<CourierPaymentScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSuccess(bool dark) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ScaleTransition(
-              scale: _scaleAnim,
-              child: Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: AppColors.success.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check_circle_rounded,
-                    color: AppColors.success, size: 60),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text('Booking Confirmed!',
-                style: TextStyle(
-                    color: dark ? Colors.white : AppColors.textDark,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900)),
-            const SizedBox(height: 8),
-            Text(
-              '${widget.args.fromCity} → ${widget.args.toCity}\n${widget.args.partner} · ${widget.args.orderId}',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  color: dark ? Colors.white54 : AppColors.textDarkSecondary,
-                  fontSize: 14),
-            ),
-            const SizedBox(height: 32),
-            FilledButton.icon(
-              onPressed: () => context.go('/customer/home'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-              ),
-              icon: const Icon(Icons.home_rounded),
-              label: const Text('Back to Dashboard',
-                  style: TextStyle(fontWeight: FontWeight.w700)),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => context.go('/customer/track'),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-                side: const BorderSide(color: AppColors.primary),
-              ),
-              icon: const Icon(Icons.route_rounded, color: AppColors.primary),
-              label: const Text('Track Shipment',
-                  style: TextStyle(
-                      color: AppColors.primary, fontWeight: FontWeight.w700)),
-            ),
-          ],
-        ),
       ),
     );
   }

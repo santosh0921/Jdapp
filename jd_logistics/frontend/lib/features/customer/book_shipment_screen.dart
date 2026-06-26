@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
+import 'package:jd_style_logistics/core/network/api_exception.dart';
 import 'package:jd_style_logistics/core/widgets/custom_app_bar.dart';
 import 'package:jd_style_logistics/core/widgets/custom_button.dart';
 import 'package:jd_style_logistics/core/widgets/custom_textfield.dart';
 import 'package:jd_style_logistics/core/widgets/glass_card.dart';
 import 'package:jd_style_logistics/core/widgets/gradient_background.dart';
 import 'package:jd_style_logistics/features/customer/courier_payment_screen.dart';
+import 'package:jd_style_logistics/services/courier_service.dart';
 
 class BookShipmentScreen extends StatefulWidget {
   const BookShipmentScreen({super.key});
@@ -32,6 +34,7 @@ class _BookShipmentScreenState extends State<BookShipmentScreen>
   String _selectedMode = 'Road';
   String _selectedPartner = 'Delhivery';
   bool _insurance = true;
+  bool _estimating = false;
 
   final _types = const [
     _ShipmentType('Document', 'Files & papers', Icons.description_rounded, '₹99'),
@@ -188,11 +191,10 @@ class _BookShipmentScreenState extends State<BookShipmentScreen>
                             ),
                             const SizedBox(height: 20),
                             GradientButton(
-                              label: 'Get Quote & Book',
-                              icon: Icons.arrow_forward_rounded,
-                              onPressed: () {
-                                _showBookingSuccess(context, _mode);
-                              },
+                              label: _estimating ? 'Getting Quote...' : 'Get Quote & Book',
+                              icon: _estimating ? null : Icons.arrow_forward_rounded,
+                              isLoading: _estimating,
+                              onPressed: _estimating ? null : _getQuoteAndBook,
                             ),
                           ],
                         ),
@@ -208,20 +210,79 @@ class _BookShipmentScreenState extends State<BookShipmentScreen>
     );
   }
 
-  void _showBookingSuccess(BuildContext context, _Mode mode) {
-    final rawPrice = _type.price.replaceAll(RegExp(r'[^0-9]'), '');
-    final amount = double.tryParse(rawPrice) ?? 149.0;
+  Future<void> _getQuoteAndBook() async {
+    final pickup = _pickupCtrl.text.trim();
+    final drop = _dropCtrl.text.trim();
+
+    if (pickup.isEmpty || drop.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter pickup and delivery addresses'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _estimating = true);
+
+    final weightStr = _weightCtrl.text.isNotEmpty ? _weightCtrl.text : '1 kg';
+    final weightNum = double.tryParse(
+            weightStr.replaceAll(RegExp(r'[^0-9.]'), '')) ??
+        1.0;
+
+    double estimatedTotal;
+
+    try {
+      final result = await CourierService.instance.estimate({
+        'pickup_address': pickup,
+        'delivery_address': drop,
+        'weight': weightNum,
+        'package_type': _selectedType,
+        'mode': _selectedMode.toLowerCase(),
+        'insurance': _insurance,
+      });
+
+      estimatedTotal =
+          (result['total_amount'] as num? ??
+                  result['estimated_amount'] as num? ??
+                  result['amount'] as num?)
+              ?.toDouble() ??
+          _basePriceForType();
+    } catch (e) {
+      // If estimate API fails, fall back to the type's base price and continue.
+      estimatedTotal = _basePriceForType();
+      if (mounted) {
+        final msg = e is ApiException ? e.message : 'Could not fetch live price. Using base estimate.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: const Color(0xFFF59E0B)),
+        );
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _estimating = false);
+
     context.push(
       '/courier/payment',
       extra: CourierPaymentArgs(
         orderId: 'JD${DateTime.now().millisecondsSinceEpoch % 100000}',
-        totalAmount: amount,
-        fromCity: _pickupCtrl.text.isNotEmpty ? _pickupCtrl.text : 'Origin',
-        toCity: _dropCtrl.text.isNotEmpty ? _dropCtrl.text : 'Destination',
-        packageType: _type.title,
+        totalAmount: estimatedTotal,
+        fromCity: pickup,
+        toCity: drop,
+        packageType: _selectedType,
         partner: _selectedPartner,
+        mode: _selectedMode.toLowerCase(),
+        weight: weightStr,
+        withInsurance: _insurance,
+        notes: _notesCtrl.text.trim(),
       ),
     );
+  }
+
+  double _basePriceForType() {
+    final rawPrice = _type.price.replaceAll(RegExp(r'[^0-9]'), '');
+    return double.tryParse(rawPrice) ?? 149.0;
   }
 }
 

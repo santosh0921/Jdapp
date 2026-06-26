@@ -2,15 +2,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
+import 'package:jd_style_logistics/core/network/api_exception.dart';
 import 'package:jd_style_logistics/core/widgets/glass_card.dart';
 import 'package:jd_style_logistics/core/widgets/gradient_button.dart';
 import 'package:jd_style_logistics/core/widgets/theme_toggle_button.dart';
+import 'package:jd_style_logistics/services/courier_service.dart';
+import 'package:jd_style_logistics/services/payment_service.dart';
 
 class OrderConfirmationScreen extends StatefulWidget {
   final String mode;
   final String total;
-  const OrderConfirmationScreen(
-      {super.key, this.mode = 'road', this.total = '1952'});
+  final String pickup;
+  final String drop;
+  final String weight;
+  final String packageType;
+
+  const OrderConfirmationScreen({
+    super.key,
+    this.mode = 'road',
+    this.total = '1952',
+    this.pickup = '',
+    this.drop = '',
+    this.weight = '1',
+    this.packageType = 'Parcel',
+  });
 
   @override
   State<OrderConfirmationScreen> createState() =>
@@ -45,13 +60,74 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
     }
   }
 
+  String get _pickupLabel =>
+      widget.pickup.isNotEmpty ? widget.pickup : '12, Andheri Industrial Area, Mumbai 400053';
+
+  String get _dropLabel =>
+      widget.drop.isNotEmpty ? widget.drop : '45, Connaught Place, New Delhi 110001';
+
   Future<void> _placeOrder() async {
     HapticFeedback.mediumImpact();
     setState(() => _placing = true);
-    await Future<void>.delayed(const Duration(milliseconds: 1400));
+
+    String? errorMsg;
+    String? realOrderId;
+
+    try {
+      final amount = double.tryParse(widget.total) ?? 1952.0;
+      final weightNum = double.tryParse(widget.weight) ?? 1.0;
+
+      // Create courier order.
+      final orderData = await CourierService.instance.createOrder({
+        'pickup_address': _pickupLabel,
+        'delivery_address': _dropLabel,
+        'package_type': widget.packageType,
+        'weight': weightNum,
+        'amount': amount,
+        'mode': widget.mode,
+        'payment_method': _payMethod,
+      });
+
+      realOrderId = orderData['id']?.toString() ??
+          orderData['tracking_id']?.toString() ??
+          orderData['order_id']?.toString();
+
+      // Create and verify payment.
+      final payData = await PaymentService.instance.createPaymentOrder(
+        orderId: realOrderId ?? 'JD${DateTime.now().millisecondsSinceEpoch % 100000}',
+        amount: amount,
+        method: _payMethod,
+      );
+      final paymentId = payData['payment_id'] as String? ??
+          payData['id']?.toString() ??
+          'PAY_${DateTime.now().millisecondsSinceEpoch}';
+
+      await PaymentService.instance.verifyPayment(
+        paymentId: paymentId,
+        orderId: realOrderId ?? 'JD-OC',
+      );
+    } catch (e) {
+      errorMsg = e is ApiException ? e.message : e.toString();
+    }
+
     if (!mounted) return;
+    setState(() => _placing = false);
+
+    if (errorMsg != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMsg),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
+    final ordId = realOrderId ?? 'JD-${DateTime.now().millisecondsSinceEpoch % 100000}';
     context.pushReplacement(
-        '/shipment/delivery-success?mode=${widget.mode}');
+      '/shipment/delivery-success?id=${Uri.encodeComponent(ordId)}&mode=${widget.mode}',
+    );
   }
 
   @override
@@ -121,22 +197,20 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                           ),
                         ]),
                         const SizedBox(height: 16),
-                        _SummaryRow(label: 'Route',
-                            value: 'Mumbai → Delhi', isDark: isDark),
-                        _SummaryRow(label: 'Mode',
+                        _SummaryRow(
+                            label: 'Route',
+                            value: '${_pickupLabel.split(',').first} → ${_dropLabel.split(',').first}',
+                            isDark: isDark),
+                        _SummaryRow(
+                            label: 'Mode',
                             value: '${widget.mode[0].toUpperCase()}${widget.mode.substring(1)} Freight',
                             isDark: isDark),
-                        _SummaryRow(label: 'Partner',
-                            value: 'Blue Dart', isDark: isDark),
                         _SummaryRow(label: 'Weight',
-                            value: '5.2 kg', isDark: isDark),
+                            value: '${widget.weight} kg', isDark: isDark),
+                        _SummaryRow(label: 'Package Type',
+                            value: widget.packageType, isDark: isDark),
                         _SummaryRow(label: 'ETA',
                             value: '2–3 business days', isDark: isDark),
-                        _SummaryRow(label: 'Category',
-                            value: 'Electronics', isDark: isDark),
-                        _SummaryRow(label: 'Insurance',
-                            value: 'Included (₹149)', isDark: isDark,
-                            valueColor: AppColors.success),
                         const Divider(height: 20),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -169,7 +243,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                         icon: Icons.circle,
                         iconColor: _modeColor,
                         label: 'Pickup',
-                        address: '12, Andheri Industrial Area, Mumbai 400053',
+                        address: _pickupLabel,
                         isDark: isDark,
                       ),
                       Padding(
@@ -185,7 +259,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                         icon: Icons.location_on_rounded,
                         iconColor: AppColors.error,
                         label: 'Delivery',
-                        address: '45, Connaught Place, New Delhi 110001',
+                        address: _dropLabel,
                         isDark: isDark,
                       ),
                     ]),
@@ -326,12 +400,8 @@ class _SummaryRow extends StatelessWidget {
   final String label;
   final String value;
   final bool isDark;
-  final Color? valueColor;
   const _SummaryRow(
-      {required this.label,
-      required this.value,
-      required this.isDark,
-      this.valueColor});
+      {required this.label, required this.value, required this.isDark});
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -345,12 +415,15 @@ class _SummaryRow extends StatelessWidget {
                         ? AppColors.darkSubtext
                         : AppColors.textDarkSecondary,
                     fontSize: 13)),
-            Text(value,
-                style: TextStyle(
-                    color: valueColor ??
-                        (isDark ? Colors.white : AppColors.textDark),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13)),
+            Flexible(
+              child: Text(value,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                      color: isDark ? Colors.white : AppColors.textDark,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13)),
+            ),
           ],
         ),
       );
