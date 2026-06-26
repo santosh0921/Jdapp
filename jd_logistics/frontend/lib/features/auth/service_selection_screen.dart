@@ -127,9 +127,14 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen>
   Widget build(BuildContext context) {
     final dark = context.watch<ThemeProvider>().isDark;
 
-    return Scaffold(
-      backgroundColor: AppColors.background(context),
-      body: GradientBackground(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go('/onboarding');
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background(context),
+        body: GradientBackground(
         child: RepaintBoundary(
           child: AnimatedBuilder(
             animation: _motion,
@@ -204,6 +209,7 @@ class _ServiceSelectionScreenState extends State<ServiceSelectionScreen>
             ),
           ),
         ),
+      ),
       ),
     );
   }

@@ -111,7 +111,12 @@ Future<void> _proceed() async {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go('/service-selection');
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background(context),
       body: GradientBackground(
         child: AnimatedBuilder(
@@ -221,6 +226,7 @@ Future<void> _proceed() async {
             );
           },
         ),
+      ),
       ),
     );
   }

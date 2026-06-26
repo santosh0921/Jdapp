@@ -262,7 +262,12 @@ class _LoginScreenState extends State<LoginScreen>
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go('/role-selection');
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background(context),
       body: GradientBackground(
         child: AnimatedBuilder(
@@ -409,6 +414,7 @@ class _LoginScreenState extends State<LoginScreen>
             );
           },
         ),
+      ),
       ),
     );
   }
