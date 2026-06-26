@@ -67,7 +67,10 @@ type RefreshTokenRequest struct {
 }
 
 type AuthResponse struct {
-	Token        string `json:"token"`
+	Token        string `json:"token"`        // backwards compat
+	AccessToken  string `json:"access_token"` // OAuth standard
 	RefreshToken string `json:"refresh_token,omitempty"`
+	ExpiresAt    string `json:"expires_at"`
 	User         *User  `json:"user"`
+	Role         string `json:"role"`
 }

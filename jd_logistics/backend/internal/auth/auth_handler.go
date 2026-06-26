@@ -2,6 +2,7 @@ package auth
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -46,7 +47,15 @@ func (h *Handler) VerifyOTP(c *gin.Context) {
 		utils.Unauthorized(c, err.Error())
 		return
 	}
-	utils.OK(c, AuthResponse{Token: token, RefreshToken: refreshToken, User: user})
+	expiresAt := time.Now().Add(30 * 24 * time.Hour).Format(time.RFC3339)
+	utils.OK(c, AuthResponse{
+		Token:        token,
+		AccessToken:  token,
+		RefreshToken: refreshToken,
+		ExpiresAt:    expiresAt,
+		User:         user,
+		Role:         user.Role,
+	})
 }
 
 // SetupProfile handles POST /auth/setup-profile  (JWT required)
@@ -82,7 +91,15 @@ func (h *Handler) SelectRole(c *gin.Context) {
 		utils.BadRequest(c, err.Error())
 		return
 	}
-	utils.OK(c, AuthResponse{Token: token, RefreshToken: refreshToken, User: user})
+	expiresAt := time.Now().Add(30 * 24 * time.Hour).Format(time.RFC3339)
+	utils.OK(c, AuthResponse{
+		Token:        token,
+		AccessToken:  token,
+		RefreshToken: refreshToken,
+		ExpiresAt:    expiresAt,
+		User:         user,
+		Role:         user.Role,
+	})
 }
 
 // GetProfile handles GET /auth/profile  (JWT required)
@@ -110,7 +127,15 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 		utils.Unauthorized(c, err.Error())
 		return
 	}
-	utils.OK(c, AuthResponse{Token: token, RefreshToken: newRefresh, User: user})
+	expiresAt := time.Now().Add(30 * 24 * time.Hour).Format(time.RFC3339)
+	utils.OK(c, AuthResponse{
+		Token:        token,
+		AccessToken:  token,
+		RefreshToken: newRefresh,
+		ExpiresAt:    expiresAt,
+		User:         user,
+		Role:         user.Role,
+	})
 }
 
 // Logout handles POST /auth/logout  (public — best-effort)
