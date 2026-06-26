@@ -7,6 +7,8 @@ import 'package:jd_style_logistics/core/widgets/custom_button.dart';
 import 'package:jd_style_logistics/core/widgets/custom_textfield.dart';
 import 'package:jd_style_logistics/core/widgets/glass_card.dart';
 import 'package:jd_style_logistics/core/widgets/gradient_background.dart';
+import 'package:jd_style_logistics/models/shipment_model.dart';
+import 'package:jd_style_logistics/services/tracking_service.dart';
 
 class TrackShipmentScreen extends StatefulWidget {
   final String? trackingId;
@@ -25,6 +27,8 @@ class _TrackShipmentScreenState extends State<TrackShipmentScreen>
   late final AnimationController _pulseCtrl;
 
   bool _searched = false;
+  bool _loadingTrack = false;
+  List<_TrackingStepData>? _liveSteps;
 
   final _steps = const [
     _TrackingStepData(
@@ -93,9 +97,74 @@ class _TrackShipmentScreenState extends State<TrackShipmentScreen>
     super.dispose();
   }
 
-  void _trackShipment() {
+  Future<void> _trackShipment() async {
     FocusScope.of(context).unfocus();
-    setState(() => _searched = true);
+    setState(() { _searched = true; _loadingTrack = true; _liveSteps = null; });
+
+    final id = _trackingId;
+    final events = await TrackingService.instance.getEvents(id);
+
+    if (!mounted) return;
+
+    List<_TrackingStepData>? live;
+    if (events.isNotEmpty) {
+      live = events.asMap().entries.map((e) {
+        final ev = e.value;
+        final isLast = e.key == events.length - 1;
+        return _TrackingStepData(
+          title: _statusLabel(ev.status),
+          subtitle: ev.location + (ev.note != null ? ' · ${ev.note}' : ''),
+          time: _fmtTime(ev.createdAt),
+          icon: _statusIcon(ev.status),
+          done: !isLast,
+          active: isLast,
+        );
+      }).toList();
+    }
+
+    setState(() { _loadingTrack = false; _liveSteps = live; });
+  }
+
+  String _statusLabel(String s) {
+    switch (s.toLowerCase()) {
+      case 'booked':        return 'Shipment Booked';
+      case 'picked_up':     return 'Picked Up';
+      case 'at_hub':        return 'Reached Hub';
+      case 'in_transit':    return 'In Transit';
+      case 'out_for_delivery': return 'Out for Delivery';
+      case 'delivered':     return 'Delivered';
+      case 'failed':        return 'Delivery Attempted';
+      case 'returned':      return 'Returned to Sender';
+      default: return s.replaceAll('_', ' ').split(' ').map((w) =>
+          w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}').join(' ');
+    }
+  }
+
+  IconData _statusIcon(String s) {
+    switch (s.toLowerCase()) {
+      case 'booked':           return Icons.inventory_2_rounded;
+      case 'picked_up':        return Icons.local_shipping_rounded;
+      case 'at_hub':           return Icons.warehouse_rounded;
+      case 'in_transit':       return Icons.local_shipping_rounded;
+      case 'out_for_delivery': return Icons.delivery_dining_rounded;
+      case 'delivered':        return Icons.verified_rounded;
+      case 'failed':           return Icons.error_rounded;
+      case 'returned':         return Icons.keyboard_return_rounded;
+      default:                 return Icons.circle_outlined;
+    }
+  }
+
+  String _fmtTime(DateTime dt) {
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+    if (diff.inDays == 0) {
+      final m = dt.minute.toString().padLeft(2, '0');
+      final ampm = dt.hour < 12 ? 'AM' : 'PM';
+      final h12 = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+      return 'Today · $h12:$m $ampm';
+    }
+    if (diff.inDays == 1) return 'Yesterday';
+    return '${dt.day}/${dt.month}/${dt.year}';
   }
 
   String get _trackingId =>
@@ -172,7 +241,10 @@ class _TrackShipmentScreenState extends State<TrackShipmentScreen>
                             else
                               _EmptyTrackCard(pulse: _pulseCtrl.value),
                             const SizedBox(height: 18),
-                            if (_searched) _TimelineCard(steps: _steps),
+                            if (_searched)
+                              _loadingTrack
+                                  ? const Center(child: CircularProgressIndicator())
+                                  : _TimelineCard(steps: _liveSteps ?? _steps),
                           ],
                         ),
                       ),

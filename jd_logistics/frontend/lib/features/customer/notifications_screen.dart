@@ -6,6 +6,8 @@ import 'package:jd_style_logistics/core/constants/app_colors.dart';
 import 'package:jd_style_logistics/core/widgets/custom_app_bar.dart';
 import 'package:jd_style_logistics/core/widgets/glass_card.dart';
 import 'package:jd_style_logistics/core/widgets/gradient_background.dart';
+import 'package:jd_style_logistics/models/notification_model.dart';
+import 'package:jd_style_logistics/services/notification_service.dart';
 
 class CustomerNotificationsScreen extends StatefulWidget {
   const CustomerNotificationsScreen({super.key});
@@ -19,6 +21,7 @@ class _CustomerNotificationsScreenState
     extends State<CustomerNotificationsScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _motion;
+  List<_NotificationData>? _liveNotifications;
 
   static const _country = _CountryData(
     countryName: 'India',
@@ -98,6 +101,104 @@ class _CustomerNotificationsScreenState
       vsync: this,
       duration: const Duration(seconds: 10),
     )..repeat();
+    _loadNotifications();
+  }
+
+  Future<void> _loadNotifications() async {
+    final models = await NotificationService.instance.getNotifications();
+    if (!mounted || models.isEmpty) return;
+    setState(() => _liveNotifications = models.map(_fromModel).toList());
+  }
+
+  Future<void> _markAllRead() async {
+    await NotificationService.instance.markAllRead();
+    if (!mounted) return;
+    setState(() {
+      _liveNotifications = (_liveNotifications ?? _notifications)
+          .map((n) => _NotificationData(
+                icon: n.icon, title: n.title, message: n.message,
+                time: n.time, tag: n.tag, color: n.color,
+                unread: false, trackingId: n.trackingId,
+                route: n.route, hub: n.hub,
+                countryFlag: n.countryFlag, countryName: n.countryName,
+                group: n.group,
+              ))
+          .toList();
+    });
+  }
+
+  Future<void> _markOneRead(String notifId) async {
+    await NotificationService.instance.markRead(notifId);
+    if (!mounted) return;
+    setState(() {
+      _liveNotifications = (_liveNotifications ?? _notifications)
+          .map((n) => n.trackingId == notifId
+              ? _NotificationData(
+                  icon: n.icon, title: n.title, message: n.message,
+                  time: n.time, tag: n.tag, color: n.color,
+                  unread: false, trackingId: n.trackingId,
+                  route: n.route, hub: n.hub,
+                  countryFlag: n.countryFlag, countryName: n.countryName,
+                  group: n.group,
+                )
+              : n)
+          .toList();
+    });
+  }
+
+  static _NotificationData _fromModel(NotificationModel m) {
+    final now = DateTime.now();
+    final diff = now.difference(m.createdAt);
+    String time;
+    if (diff.inMinutes < 60) {
+      time = '${diff.inMinutes} min ago';
+    } else if (diff.inHours < 24) {
+      time = '${diff.inHours} hr${diff.inHours > 1 ? 's' : ''} ago';
+    } else {
+      time = '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
+    }
+    String group;
+    if (diff.inHours < 1) {
+      group = 'Recent';
+    } else if (diff.inHours < 24) {
+      group = 'Today';
+    } else if (diff.inDays == 1) {
+      group = 'Yesterday';
+    } else {
+      group = 'Older';
+    }
+    IconData icon;
+    Color color;
+    String tag;
+    switch (m.type) {
+      case 'shipment':
+        icon = Icons.local_shipping_rounded; color = AppColors.primary; tag = 'Shipment'; break;
+      case 'payment':
+        icon = Icons.payments_rounded; color = AppColors.success; tag = 'Payment'; break;
+      case 'customs':
+        icon = Icons.gavel_rounded; color = AppColors.portOrange; tag = 'Customs'; break;
+      case 'delivery':
+        icon = Icons.verified_rounded; color = AppColors.success; tag = 'Delivery'; break;
+      case 'driver':
+        icon = Icons.delivery_dining_rounded; color = AppColors.driverColor; tag = 'Driver'; break;
+      default:
+        icon = Icons.notifications_rounded; color = AppColors.primary; tag = 'Update';
+    }
+    return _NotificationData(
+      icon: icon,
+      title: m.title,
+      message: m.body,
+      time: time,
+      tag: tag,
+      color: color,
+      unread: !m.isRead,
+      trackingId: m.id,
+      route: '',
+      hub: '',
+      countryFlag: '🇮🇳',
+      countryName: 'India',
+      group: group,
+    );
   }
 
   @override
@@ -115,7 +216,7 @@ class _CustomerNotificationsScreenState
         showBack: false,
         actions: [
           TextButton(
-            onPressed: () {},
+            onPressed: _markAllRead,
             child: const Text(
               'Mark all read',
               style: TextStyle(
@@ -178,9 +279,10 @@ class _CustomerNotificationsScreenState
   List<Widget> _groupedNotifications() {
     final groups = ['Recent', 'Today', 'Yesterday', 'Older'];
     final widgets = <Widget>[];
+    final source = _liveNotifications ?? _notifications;
 
     for (final group in groups) {
-      final items = _notifications.where((item) => item.group == group).toList();
+      final items = source.where((item) => item.group == group).toList();
 
       if (items.isEmpty) continue;
 
@@ -191,7 +293,10 @@ class _CustomerNotificationsScreenState
         items.map(
           (item) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: _NotificationTile(data: item),
+            child: _NotificationTile(
+              data: item,
+              onTap: () => _markOneRead(item.trackingId),
+            ),
           ),
         ),
       );
@@ -461,8 +566,9 @@ class _CategoryChips extends StatelessWidget {
 
 class _NotificationTile extends StatefulWidget {
   final _NotificationData data;
+  final VoidCallback? onTap;
 
-  const _NotificationTile({required this.data});
+  const _NotificationTile({required this.data, this.onTap});
 
   @override
   State<_NotificationTile> createState() => _NotificationTileState();
@@ -476,6 +582,7 @@ class _NotificationTileState extends State<_NotificationTile> {
     final item = widget.data;
 
     return GestureDetector(
+      onTap: widget.onTap,
       onTapDown: (_) => setState(() => _down = true),
       onTapCancel: () => setState(() => _down = false),
       onTapUp: (_) => setState(() => _down = false),
