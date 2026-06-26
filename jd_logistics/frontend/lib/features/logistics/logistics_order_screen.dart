@@ -3,6 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:jd_style_logistics/providers/theme_provider.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
+import 'package:jd_style_logistics/core/network/api_exception.dart';
+import 'package:jd_style_logistics/features/logistics/logistics_payment_screen.dart';
+import 'package:jd_style_logistics/services/logistics_service.dart';
 import 'package:jd_style_logistics/services/pricing_service.dart';
 import '../../core/data/logistics_mock_data.dart';
 
@@ -41,6 +44,7 @@ class _LogisticsOrderScreenState extends State<LogisticsOrderScreen>
   LVehicle? _vehicle;
   List<Map<String, String>> _recommendations = [];
   bool _calculating = false;
+  bool _booking = false;
 
   @override
   void initState() {
@@ -130,6 +134,78 @@ class _LogisticsOrderScreenState extends State<LogisticsOrderScreen>
     }
 
     if (mounted) setState(() => _calculating = false);
+  }
+
+  Future<void> _confirmAndBook() async {
+    final p = _pricing;
+    final g = _selectedGoods;
+    if (p == null || g == null) return;
+
+    setState(() => _booking = true);
+
+    String? errorMsg;
+    Map<String, dynamic>? orderData;
+
+    try {
+      final rawWeight = double.tryParse(_weightCtrl.text) ?? 500;
+      final weightKg  = LogisticsMockData.toKg(rawWeight, _weightUnit);
+      final goodsValue = double.tryParse(_valueCtrl.text) ?? 500000;
+
+      orderData = await LogisticsService.instance.createOrder({
+        'shipment_type': _shipmentType.toLowerCase(),
+        'transport_mode': _transportMode,
+        'goods_id': g.id,
+        'goods_name': g.name,
+        'weight_kg': weightKg,
+        'weight_unit': _weightUnit,
+        'goods_value': goodsValue,
+        'needs_warehouse': _needsWarehouse,
+        'total_amount': p.totalAmount,
+      });
+    } catch (e) {
+      errorMsg = e is ApiException ? e.message : e.toString();
+    }
+
+    if (!mounted) return;
+    setState(() => _booking = false);
+
+    if (errorMsg != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(errorMsg),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+      return;
+    }
+
+    final orderId = orderData?['id']?.toString() ??
+        orderData?['tracking_id']?.toString() ??
+        'JDL-${DateTime.now().millisecondsSinceEpoch % 100000}';
+
+    context.push(
+      '/logistics/payment',
+      extra: LogisticsPaymentArgs(
+        orderId: orderId,
+        totalAmount: _pricing!.totalAmount,
+        fromCity: 'Mumbai',
+        toCity: 'Rotterdam',
+        goodsName: _selectedGoods!.name,
+        breakdown: {
+          'base_freight': _pricing!.baseFreight,
+          'distance_cost': _pricing!.distanceCost,
+          'weight_cost': _pricing!.weightCost,
+          'vehicle_cost': _pricing!.vehicleCost,
+          'risk_cost': _pricing!.riskCost,
+          'handling_charges': _pricing!.handlingCharges,
+          'insurance_premium': _pricing!.insurancePremium,
+          'warehouse_charges': _pricing!.warehouseCharges,
+          'documentation_charges': _pricing!.documentationCharges,
+          'customs_charges': _pricing!.customsCharges,
+          'gst_amount': _pricing!.gstAmount,
+        },
+      ),
+    );
   }
 
   @override
@@ -636,26 +712,22 @@ class _LogisticsOrderScreenState extends State<LogisticsOrderScreen>
 
         // Confirm Button
         GestureDetector(
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Order JDL-2024-${DateTime.now().millisecond.toString().padLeft(3, '0')} placed successfully!'),
-                backgroundColor: _kTeal,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            );
-            context.pop();
-          },
+          onTap: _booking ? null : _confirmAndBook,
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 18),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: [_kTeal, Color(0xFF0F9A8A)]),
+              gradient: LinearGradient(colors: _booking
+                  ? [Colors.grey.shade400, Colors.grey.shade500]
+                  : const [_kTeal, Color(0xFF0F9A8A)]),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [BoxShadow(color: _kTeal.withValues(alpha: 0.4), blurRadius: 12, offset: const Offset(0, 4))],
             ),
-            child: const Center(child: Text('Confirm & Book Shipment', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16, letterSpacing: 0.3))),
+            child: Center(
+              child: _booking
+                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                  : const Text('Confirm & Book Shipment', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16, letterSpacing: 0.3)),
+            ),
           ),
         ),
       ],
