@@ -9,16 +9,21 @@ import (
 	"jd_logistics/middleware"
 )
 
+// RegisterRoutes wires up all /auth endpoints.
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, rdb *redis.Client, cfg *config.Config) {
 	svc := NewService(db, rdb, cfg)
 	h := NewHandler(svc)
 
-	auth := rg.Group("/auth")
+	a := rg.Group("/auth")
 	{
-		auth.POST("/send-otp", h.SendOTP)
-		auth.POST("/verify-otp", h.VerifyOTP)
+		// Public — no JWT
+		a.POST("/send-otp", h.SendOTP)
+		a.POST("/verify-otp", h.VerifyOTP)
+		a.POST("/refresh-token", h.RefreshToken)
+		a.POST("/logout", h.Logout)
 
-		protected := auth.Group("")
+		// JWT-protected
+		protected := a.Group("")
 		protected.Use(middleware.Auth(cfg.JWTSecret))
 		{
 			protected.POST("/setup-profile", h.SetupProfile)

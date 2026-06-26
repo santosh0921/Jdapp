@@ -54,6 +54,18 @@ type Country struct {
 
 func (Country) TableName() string { return "jd_logistics.countries" }
 
+// ── States ─────────────────────────────────────────────────────────────────────
+
+type State struct {
+	utils.Model
+	Name      string `gorm:"not null" json:"name"`
+	Code      string `gorm:"uniqueIndex;not null" json:"code"`
+	CountryID uint   `gorm:"not null;index" json:"country_id"`
+	IsActive  bool   `gorm:"default:true" json:"is_active"`
+}
+
+func (State) TableName() string { return "jd_logistics.states" }
+
 // ── Cities ─────────────────────────────────────────────────────────────────────
 
 type City struct {
@@ -181,3 +193,30 @@ type PricingRule struct {
 }
 
 func (PricingRule) TableName() string { return "jd_logistics.pricing_rules" }
+
+// ── Fuel Rates ─────────────────────────────────────────────────────────────────
+
+type FuelRate struct {
+	utils.Model
+	FuelType    string  `gorm:"not null" json:"fuel_type"` // diesel|petrol|cng|electric
+	PricePerLtr float64 `gorm:"not null" json:"price_per_ltr"`
+	EffectiveOn string  `gorm:"not null" json:"effective_on"`
+	State       string  `json:"state"`
+	IsActive    bool    `gorm:"default:true" json:"is_active"`
+}
+
+func (FuelRate) TableName() string { return "jd_logistics.fuel_rates" }
+
+// ── Insurance Rates ────────────────────────────────────────────────────────────
+
+type InsuranceRate struct {
+	utils.Model
+	GoodsCategoryID *uint   `gorm:"index" json:"goods_category_id"`
+	CategoryName    string  `json:"category_name"`
+	RatePct         float64 `gorm:"not null" json:"rate_pct"` // percentage of declared value
+	MinPremium      float64 `gorm:"default:50" json:"min_premium"`
+	MaxCoverage     float64 `json:"max_coverage"`
+	IsActive        bool    `gorm:"default:true" json:"is_active"`
+}
+
+func (InsuranceRate) TableName() string { return "jd_logistics.insurance_rates" }

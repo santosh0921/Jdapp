@@ -9,6 +9,7 @@ import (
 	"jd_logistics/internal/admin"
 	"jd_logistics/internal/auth"
 	"jd_logistics/internal/driver"
+	"jd_logistics/internal/fleet"
 	"jd_logistics/internal/master"
 	"jd_logistics/internal/notifications"
 	"jd_logistics/internal/payments"
@@ -33,6 +34,7 @@ func Run(db *gorm.DB) error {
 		&master.GoodsCategory{},
 		&master.VehicleType{},
 		&master.Country{},
+		&master.State{},
 		&master.City{},
 		&master.Port{},
 		&master.TransportMode{},
@@ -42,10 +44,13 @@ func Run(db *gorm.DB) error {
 		&master.GSTRate{},
 		&master.HSNCode{},
 		&master.PricingRule{},
+		&master.FuelRate{},
+		&master.InsuranceRate{},
 
 		// ── Auth & Users ─────────────────────────────────────────────────────
 		&auth.User{},
 		&auth.OTPRecord{},
+		&auth.RefreshToken{},
 		&users.Profile{},
 
 		// ── Shipments ────────────────────────────────────────────────────────
@@ -63,6 +68,10 @@ func Run(db *gorm.DB) error {
 		&driver.Vehicle{},
 		&driver.DriverWallet{},
 		&driver.EarningRecord{},
+
+		// ── Fleet ────────────────────────────────────────────────────────────
+		&fleet.VehicleMaintenance{},
+		&fleet.VehicleDocument{},
 
 		// ── Warehouse ────────────────────────────────────────────────────────
 		&warehouse.Warehouse{},
@@ -83,6 +92,6 @@ func Run(db *gorm.DB) error {
 		return fmt.Errorf("auto migrate: %w", err)
 	}
 
-	log.Println("Migrations completed")
+	log.Println("Migrations completed successfully")
 	return nil
 }

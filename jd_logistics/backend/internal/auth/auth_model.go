@@ -6,6 +6,7 @@ import (
 	"jd_logistics/utils"
 )
 
+// User is the platform-wide user record.
 type User struct {
 	utils.Model
 	Phone     string     `gorm:"uniqueIndex;not null" json:"phone"`
@@ -19,6 +20,7 @@ type User struct {
 
 func (User) TableName() string { return "jd_logistics.users" }
 
+// OTPRecord stores OTPs when Redis is unavailable.
 type OTPRecord struct {
 	utils.Model
 	Phone     string    `gorm:"index;not null" json:"phone"`
@@ -28,6 +30,19 @@ type OTPRecord struct {
 }
 
 func (OTPRecord) TableName() string { return "jd_logistics.otp_records" }
+
+// RefreshToken stores long-lived refresh tokens for silent re-auth.
+type RefreshToken struct {
+	utils.Model
+	UserID    uint      `gorm:"not null;index" json:"user_id"`
+	Token     string    `gorm:"uniqueIndex;not null" json:"token"`
+	ExpiresAt time.Time `gorm:"not null" json:"expires_at"`
+	Used      bool      `gorm:"default:false" json:"used"`
+}
+
+func (RefreshToken) TableName() string { return "jd_logistics.refresh_tokens" }
+
+// ── Request / Response DTOs ──────────────────────────────────────────────────
 
 type SendOTPRequest struct {
 	Phone string `json:"phone" binding:"required"`
@@ -47,7 +62,12 @@ type SelectRoleRequest struct {
 	Role string `json:"role" binding:"required,oneof=customer driver warehouse admin"`
 }
 
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
 type AuthResponse struct {
-	Token string `json:"token"`
-	User  *User  `json:"user"`
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	User         *User  `json:"user"`
 }

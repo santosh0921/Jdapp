@@ -2,6 +2,7 @@ package admin
 
 import "jd_logistics/utils"
 
+// DashboardStats is the high-level summary for the admin dashboard.
 type DashboardStats struct {
 	TotalUsers       int64   `json:"total_users"`
 	TotalDrivers     int64   `json:"total_drivers"`
@@ -13,6 +14,28 @@ type DashboardStats struct {
 	TodayShipments   int64   `json:"today_shipments"`
 	OnlineDrivers    int64   `json:"online_drivers"`
 	WarehousesOnline int64   `json:"warehouses_online"`
+}
+
+// AnalyticsData is returned by GET /admin/analytics.
+// Keys match Flutter's AdminService.getAnalytics() parser.
+type AnalyticsData struct {
+	ShipmentsMTD   int64        `json:"shipments_mtd"`
+	RevenueMTD     float64      `json:"revenue_mtd"`
+	ActiveDrivers  int64        `json:"active_drivers"`
+	OnTimeDelivery float64      `json:"on_time_delivery"`
+	DailyShipments []float64    `json:"daily_shipments"`
+	DailyRevenue   []float64    `json:"daily_revenue"`
+	ModeRoad       float64      `json:"mode_road"`
+	ModeAir        float64      `json:"mode_air"`
+	ModeOcean      float64      `json:"mode_ocean"`
+	TopRoutes      []RouteStats `json:"top_routes"`
+}
+
+// RouteStats is a top-route entry.
+type RouteStats struct {
+	From  string `json:"from"`
+	To    string `json:"to"`
+	Count int    `json:"count"`
 }
 
 // AuditLog records every significant platform action.

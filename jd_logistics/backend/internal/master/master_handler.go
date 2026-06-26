@@ -1,12 +1,17 @@
 package master
 
 import (
+	"strconv"
+
 	"github.com/gin-gonic/gin"
+
 	"jd_logistics/utils"
 )
 
+// Handler holds the master service.
 type Handler struct{ svc *Service }
 
+// NewHandler creates a Handler.
 func NewHandler(svc *Service) *Handler { return &Handler{svc: svc} }
 
 func (h *Handler) GetRoles(c *gin.Context) {
@@ -38,6 +43,32 @@ func (h *Handler) GetVehicleTypes(c *gin.Context) {
 
 func (h *Handler) GetCountries(c *gin.Context) {
 	data, err := h.svc.GetCountries()
+	if err != nil {
+		utils.InternalError(c, err)
+		return
+	}
+	utils.OK(c, data)
+}
+
+func (h *Handler) GetStates(c *gin.Context) {
+	countryID, _ := strconv.ParseUint(c.Query("country_id"), 10, 64)
+	data, err := h.svc.GetStates(uint(countryID))
+	if err != nil {
+		utils.InternalError(c, err)
+		return
+	}
+	utils.OK(c, data)
+}
+
+func (h *Handler) GetCities(c *gin.Context) {
+	countryID, _ := strconv.ParseUint(c.Query("country_id"), 10, 64)
+	state := c.Query("state")
+	var isHub *bool
+	if v := c.Query("is_hub"); v != "" {
+		b := v == "true"
+		isHub = &b
+	}
+	data, err := h.svc.GetCities(uint(countryID), state, isHub)
 	if err != nil {
 		utils.InternalError(c, err)
 		return
@@ -100,7 +131,9 @@ func (h *Handler) GetGSTRates(c *gin.Context) {
 }
 
 func (h *Handler) GetHSNCodes(c *gin.Context) {
-	data, err := h.svc.GetHSNCodes()
+	search := c.Query("search")
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	data, err := h.svc.GetHSNCodes(search, limit)
 	if err != nil {
 		utils.InternalError(c, err)
 		return
@@ -110,6 +143,24 @@ func (h *Handler) GetHSNCodes(c *gin.Context) {
 
 func (h *Handler) GetPricingRules(c *gin.Context) {
 	data, err := h.svc.GetPricingRules()
+	if err != nil {
+		utils.InternalError(c, err)
+		return
+	}
+	utils.OK(c, data)
+}
+
+func (h *Handler) GetFuelRates(c *gin.Context) {
+	data, err := h.svc.GetFuelRates()
+	if err != nil {
+		utils.InternalError(c, err)
+		return
+	}
+	utils.OK(c, data)
+}
+
+func (h *Handler) GetInsuranceRates(c *gin.Context) {
+	data, err := h.svc.GetInsuranceRates()
 	if err != nil {
 		utils.InternalError(c, err)
 		return
