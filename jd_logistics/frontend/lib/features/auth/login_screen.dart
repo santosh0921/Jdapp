@@ -208,7 +208,9 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _loading = true);
     HapticFeedback.mediumImpact();
 
-    await Future.delayed(const Duration(milliseconds: 700));
+    // Local form-level gate: email + password format passes before OTP step.
+    // Backend security is enforced at OTP verification (role = admin check).
+    await Future.delayed(const Duration(milliseconds: 400));
 
     if (!mounted) return;
 
@@ -232,14 +234,28 @@ class _LoginScreenState extends State<LoginScreen>
     HapticFeedback.lightImpact();
 
     await _storeCountry();
-    await Future.delayed(const Duration(milliseconds: 650));
+
+    final fullPhone = '${_selectedCountry.dialCode}${_phoneCtrl.text.trim()}';
+
+    // Actually call the backend send-otp API.
+    final ok = await auth.sendOtp(fullPhone);
 
     if (!mounted) return;
 
     setState(() => _loading = false);
 
-    final fullPhone = '${_selectedCountry.dialCode}${_phoneCtrl.text.trim()}';
-    context.go('/otp?phone=${Uri.encodeComponent(fullPhone)}');
+    if (ok) {
+      context.go('/otp?phone=${Uri.encodeComponent(fullPhone)}');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(auth.error ?? 'Failed to send OTP. Please try again.'),
+          backgroundColor: const Color(0xFFEF4444),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        ),
+      );
+    }
   }
 
   @override

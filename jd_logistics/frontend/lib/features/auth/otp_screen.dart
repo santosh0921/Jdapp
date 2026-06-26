@@ -128,17 +128,21 @@ class _OtpScreenState extends State<OtpScreen> with TickerProviderStateMixin {
     _tickCtrl.dispose();
     super.dispose();
   }
-void _resendOtp() {
+Future<void> _resendOtp() async {
   HapticFeedback.lightImpact();
 
   _otpCtrl.clear();
-  _otpNode.requestFocus();
+  setState(() => _errorMessage = null);
 
-  setState(() {
-    _errorMessage = null;
-  });
+  // Actually call the backend to send a fresh OTP.
+  final phone = Uri.decodeComponent(widget.phone);
+  final auth = context.read<AuthProvider>();
+  await auth.sendOtp(phone);
+
+  if (!mounted) return;
 
   _startTimer();
+  _otpNode.requestFocus();
 }
   String get _otp => _otpCtrl.text.trim();
 
@@ -231,36 +235,39 @@ void _resendOtp() {
   }
 
   Future<void> _playCelebration() async {
-  if (_navigating) return;
+    if (_navigating) return;
 
-  _navigating = true;
-  _timer?.cancel();
+    _navigating = true;
+    _timer?.cancel();
 
-  setState(() => _celebrating = true);
+    setState(() => _celebrating = true);
 
-  HapticFeedback.heavyImpact();
+    HapticFeedback.heavyImpact();
 
-  _tickCtrl.forward(from: 0);
-  _celebrationCtrl.forward(from: 0);
+    _tickCtrl.forward(from: 0);
+    _celebrationCtrl.forward(from: 0);
 
-  await Future.delayed(
-    const Duration(milliseconds: 2100),
-  );
+    await Future.delayed(const Duration(milliseconds: 2100));
 
-  if (!mounted) return;
+    if (!mounted) return;
 
-  final auth = context.read<AuthProvider>();
+    final auth = context.read<AuthProvider>();
+    final role = auth.selectedRole ?? 'courier_customer';
 
-  final role = auth.selectedRole ?? 'courier_customer';
-
-  switch (role) {
-    case 'admin':
+    // Admin always goes to dashboard.
+    if (role == 'admin') {
       context.go('/admin/dashboard');
-      break;
-    default:
+      return;
+    }
+
+    // Returning users who already have a name skip profile-setup.
+    final hasProfile = (auth.user?.name ?? '').isNotEmpty;
+    if (hasProfile) {
+      context.go(auth.dashboardRouteForRole(role));
+    } else {
       context.go('/profile-setup');
+    }
   }
-}
 
   @override
   Widget build(BuildContext context) {

@@ -114,15 +114,26 @@ class AuthService {
   // ── Internal helpers ──────────────────────────────────────────────────────
 
   Future<void> _persistTokens(Map<String, dynamic> data) async {
-    // Backend returns 'token'; standard OAuth returns 'access_token'.
+    // Backend returns both 'token' and 'access_token'; prefer the OAuth field.
     final access  = (data['access_token'] as String?) ?? (data['token'] as String?);
     final refresh = (data['refresh_token'] as String?) ?? '';
-    final expires = (data['expires_in'] as num?)?.toInt() ?? 86400;
+
+    // Backend returns expires_at (ISO-8601); convert to seconds from now.
+    // Fall back to expires_in (seconds) if present, else default 30 days.
+    int expiresIn = (data['expires_in'] as num?)?.toInt() ?? 2592000;
+    final expiresAtStr = data['expires_at'] as String?;
+    if (expiresAtStr != null) {
+      final exp = DateTime.tryParse(expiresAtStr);
+      if (exp != null) {
+        expiresIn = exp.difference(DateTime.now()).inSeconds.clamp(60, 31536000);
+      }
+    }
+
     if (access != null && access.isNotEmpty) {
       await TokenManager.instance.saveTokens(
         accessToken: access,
         refreshToken: refresh,
-        expiresInSeconds: expires,
+        expiresInSeconds: expiresIn,
       );
     }
   }

@@ -3,7 +3,9 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
+import 'package:jd_style_logistics/providers/auth_provider.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -17,6 +19,8 @@ class _SplashScreenState extends State<SplashScreen>
   late final AnimationController _main;
   late final AnimationController _float;
   late final AnimationController _orbit;
+
+  bool _animDone = false;
 
   @override
   void initState() {
@@ -37,13 +41,46 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(milliseconds: 6500),
     )..repeat();
 
+    // Wait for animation, then check session.
     Future.delayed(const Duration(milliseconds: 4700), () {
-      if (mounted) context.go('/onboarding');
+      _animDone = true;
+      _tryNavigate();
     });
+  }
+
+  /// Navigate once the animation is done AND auth status is known.
+  /// GoRouter's redirect logic handles sending authenticated users to their
+  /// correct dashboard — we always push to /onboarding as the next stop.
+  void _tryNavigate() {
+    if (!mounted || !_animDone) return;
+
+    final auth = context.read<AuthProvider>();
+
+    if (auth.status == AuthStatus.unknown) {
+      // Auth provider is still initialising (slow network). Wait for it.
+      auth.addListener(_onAuthResolved);
+    } else {
+      // Status is known. GoRouter redirect will send authenticated users
+      // to their dashboard; unauthenticated users land on onboarding.
+      context.go('/onboarding');
+    }
+  }
+
+  void _onAuthResolved() {
+    final auth = context.read<AuthProvider>();
+    if (auth.status != AuthStatus.unknown) {
+      auth.removeListener(_onAuthResolved);
+      if (mounted) context.go('/onboarding');
+    }
   }
 
   @override
   void dispose() {
+    // Remove listener if we were waiting
+    try {
+      final auth = context.read<AuthProvider>();
+      auth.removeListener(_onAuthResolved);
+    } catch (_) {}
     _main.dispose();
     _float.dispose();
     _orbit.dispose();

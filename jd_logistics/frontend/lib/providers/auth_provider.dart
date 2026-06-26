@@ -175,16 +175,19 @@ class AuthProvider extends ChangeNotifier {
       final data = await AuthService.instance.verifyOtp(phone, otp);
       final payload = data['data'] as Map<String, dynamic>;
 
-      final token = payload['token'] as String;
-      final user = UserModel.fromJson(payload['user'] as Map<String, dynamic>);
+      // AuthService._persistTokens already saved access + refresh tokens.
+      // Just extract user and determine the final role.
+      final userMap = payload['user'] as Map<String, dynamic>? ?? {};
+      final user = UserModel.fromJson(userMap);
 
       // Backend returns generic 'customer' for new users — preserve _selectedRole.
-      final backendRole = _normalizeRole(user.role.isNotEmpty ? user.role : 'courier_customer');
+      final backendRole = _normalizeRole(
+        user.role.isNotEmpty ? user.role : 'courier_customer',
+      );
       final finalRole = (backendRole == 'courier_customer' && _selectedRole != null)
           ? _normalizeRole(_selectedRole!)
           : backendRole;
 
-      await SecureStorageService.instance.saveAccessToken(token);
       await SecureStorageService.instance.saveUserId(user.id);
       await SecureStorageService.instance.saveUserRole(finalRole);
       await SecureStorageService.instance.savePhone(phone);
