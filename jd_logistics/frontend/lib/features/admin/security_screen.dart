@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
 import 'package:jd_style_logistics/providers/theme_provider.dart';
+import 'package:jd_style_logistics/services/admin_service.dart';
 
 class SecurityScreen extends StatefulWidget {
   const SecurityScreen({super.key});
@@ -52,6 +53,28 @@ class _SecurityScreenState extends State<SecurityScreen> {
     _SecurityEvent(icon: Icons.person_off_rounded, label: 'Failed login attempt', sub: '61.91.47.13 · 2d ago', color: 0xFFEF4444),
     _SecurityEvent(icon: Icons.settings_rounded, label: 'Settings changed', sub: '192.168.1.42 · 3d ago', color: 0xFFFF9F2F),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSecurity();
+  }
+
+  Future<void> _loadSecurity() async {
+    final data = await AdminService.instance.getSecurity();
+    if (!mounted || data.isEmpty) return;
+    setState(() {
+      _twoFactor     = data['two_factor_enabled']  as bool? ?? _twoFactor;
+      _loginAlerts   = data['login_alerts_enabled'] as bool? ?? _loginAlerts;
+      _sessionTimeout= data['session_timeout']      as bool? ?? _sessionTimeout;
+      _ipWhitelist   = data['ip_whitelist_enabled'] as bool? ?? _ipWhitelist;
+      _auditLogging  = data['audit_logging']        as bool? ?? _auditLogging;
+      _deviceTrust   = data['device_trust']         as bool? ?? _deviceTrust;
+      if (data['session_duration'] != null) {
+        _sessionDuration = data['session_duration'].toString();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

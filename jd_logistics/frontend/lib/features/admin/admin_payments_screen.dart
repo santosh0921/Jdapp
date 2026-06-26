@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
 import 'package:jd_style_logistics/core/widgets/glass_card.dart';
 import 'package:jd_style_logistics/core/widgets/gradient_background.dart';
+import 'package:jd_style_logistics/services/admin_service.dart';
 
 class AdminPaymentsScreen extends StatefulWidget {
   const AdminPaymentsScreen({super.key});
@@ -36,7 +37,7 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
 
-  static const _records = [
+  static const _fallback = [
     _PayRecord(id: 'PAY-8801', customer: 'Rahul Sharma', shipmentId: 'JD-24101', method: 'UPI', amount: 850, status: 'Settled', date: 'Jun 17'),
     _PayRecord(id: 'PAY-8802', customer: 'Ravi Kumar', shipmentId: 'JD-24101', method: 'Bank', amount: 680, status: 'Pending', date: 'Jun 17', isDriver: true),
     _PayRecord(id: 'PAY-8803', customer: 'Priya Mehta', shipmentId: 'JD-24102', method: 'Card', amount: 4250, status: 'Settled', date: 'Jun 16'),
@@ -46,6 +47,10 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen>
     _PayRecord(id: 'PAY-8807', customer: 'Suresh Patel', shipmentId: 'JD-24096', method: 'COD', amount: 540, status: 'Settled', date: 'Jun 12'),
     _PayRecord(id: 'PAY-8808', customer: 'Vikram D.', shipmentId: 'JD-24096', method: 'Bank', amount: 432, status: 'Settled', date: 'Jun 12', isDriver: true),
   ];
+
+  List<_PayRecord>? _liveRecords;
+
+  List<_PayRecord> get _records => _liveRecords ?? _fallback;
 
   double get _revenue => _records
       .where((r) => !r.isDriver && r.status == 'Settled')
@@ -63,6 +68,31 @@ class _AdminPaymentsScreenState extends State<AdminPaymentsScreen>
   void initState() {
     super.initState();
     _tabs = TabController(length: 3, vsync: this);
+    _loadPayments();
+  }
+
+  Future<void> _loadPayments() async {
+    final data = await AdminService.instance.getPayments();
+    if (!mounted || data.isEmpty) return;
+    setState(() {
+      _liveRecords = data.map((m) {
+        final isDriver = m['is_driver_payout'] == true || m['type'] == 'driver_payout';
+        final raw = m['status']?.toString() ?? 'pending';
+        final status = raw[0].toUpperCase() + raw.substring(1);
+        return _PayRecord(
+          id: m['id']?.toString() ?? m['payment_id']?.toString() ?? 'PAY',
+          customer: m['customer_name']?.toString() ?? m['name']?.toString() ?? '—',
+          shipmentId: m['order_id']?.toString() ?? m['shipment_id']?.toString() ?? '—',
+          method: m['payment_method']?.toString() ?? m['method']?.toString() ?? '—',
+          amount: (m['amount'] as num? ?? 0).toDouble(),
+          status: status,
+          date: (m['created_at']?.toString() ?? '').isNotEmpty
+              ? m['created_at'].toString().substring(0, 10)
+              : '—',
+          isDriver: isDriver,
+        );
+      }).toList();
+    });
   }
 
   @override

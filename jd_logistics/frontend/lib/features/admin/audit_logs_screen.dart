@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
 import 'package:jd_style_logistics/providers/theme_provider.dart';
+import 'package:jd_style_logistics/services/admin_service.dart';
 
 class AuditLogsScreen extends StatefulWidget {
   const AuditLogsScreen({super.key});
@@ -33,6 +34,40 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
     _Log(id: 'AL-00910', actor: 'system', action: 'OBC reward disbursement batch', category: 'Payment', time: '12:00 AM', date: '17 Jun', severity: 'info', ip: 'system', detail: '1,240 users credited'),
   ];
 
+  List<_Log>? _liveLogs;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAuditLogs();
+  }
+
+  Future<void> _loadAuditLogs() async {
+    final data = await AdminService.instance.getAuditLogs();
+    if (!mounted || data.isEmpty) return;
+    setState(() {
+      _liveLogs = data.map((m) {
+        final cat = m['category']?.toString() ?? m['action_type']?.toString() ?? 'System';
+        final sev = m['severity']?.toString() ?? 'info';
+        return _Log(
+          id: m['id']?.toString() ?? '—',
+          actor: m['actor']?.toString() ?? m['user_email']?.toString() ?? 'system',
+          action: m['action']?.toString() ?? m['description']?.toString() ?? '—',
+          category: cat,
+          time: (m['created_at']?.toString() ?? '').length >= 16
+              ? m['created_at'].toString().substring(11, 16)
+              : '—',
+          date: (m['created_at']?.toString() ?? '').length >= 10
+              ? m['created_at'].toString().substring(0, 10)
+              : '—',
+          severity: sev,
+          ip: m['ip_address']?.toString() ?? m['ip']?.toString() ?? '—',
+          detail: m['detail']?.toString() ?? m['meta']?.toString() ?? '',
+        );
+      }).toList();
+    });
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -40,9 +75,10 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
   }
 
   List<_Log> get _filtered {
+    final source = _liveLogs ?? _logs;
     var list = _selectedCategory == 'All'
-        ? _logs
-        : _logs.where((l) => l.category == _selectedCategory).toList();
+        ? source
+        : source.where((l) => l.category == _selectedCategory).toList();
     if (_searchQuery.isNotEmpty) {
       final q = _searchQuery.toLowerCase();
       list = list.where((l) =>
