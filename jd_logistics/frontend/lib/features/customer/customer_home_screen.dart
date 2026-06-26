@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
 import 'package:jd_style_logistics/core/utils/helpers.dart';
 import 'package:jd_style_logistics/core/widgets/glass_card.dart';
+import 'package:jd_style_logistics/services/courier_service.dart';
+import 'package:jd_style_logistics/services/payment_service.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -28,44 +30,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
     language: 'English / Hindi',
   );
 
-  final _shipments = const [
-    _Shipment(
-      id: 'JDIN240001',
-      origin: 'Mumbai',
-      destination: 'Delhi',
-      partner: 'VRL Logistics',
-      mode: 'Road',
-      status: 'In Transit',
-      eta: 'Today · 7:30 PM',
-      progress: 0.68,
-      icon: Icons.local_shipping_rounded,
-      color: AppColors.roadColor,
-    ),
-    _Shipment(
-      id: 'JDAIR240801',
-      origin: 'Mumbai',
-      destination: 'Singapore',
-      partner: 'Emirates SkyCargo',
-      mode: 'Air',
-      status: 'Customs Clearance',
-      eta: 'Tomorrow · 11:00 AM',
-      progress: 0.52,
-      icon: Icons.flight_takeoff_rounded,
-      color: AppColors.airColor,
-    ),
-    _Shipment(
-      id: 'JDOCEAN240128',
-      origin: 'Nhava Sheva',
-      destination: 'Dubai Port',
-      partner: 'Maersk',
-      mode: 'Ocean',
-      status: 'Port Transfer',
-      eta: 'Fri · 5:20 PM',
-      progress: 0.44,
-      icon: Icons.directions_boat_filled_rounded,
-      color: AppColors.oceanColor,
-    ),
-  ];
+  List<Map<String, dynamic>> _liveOrders = [];
+  double _walletBalance = 0;
+  bool _homeLoaded = false;
 
   @override
   void initState() {
@@ -85,7 +52,70 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
       vsync: this,
       duration: const Duration(seconds: 7),
     )..repeat();
+
+    _loadHomeData();
   }
+
+  Future<void> _loadHomeData() async {
+    try {
+      final orders = await CourierService.instance.getOrders(limit: 50);
+      if (!mounted) return;
+      setState(() { _liveOrders = orders; _homeLoaded = true; });
+    } catch (_) {
+      if (mounted) setState(() { _homeLoaded = true; });
+    }
+    try {
+      final wallet = await PaymentService.instance.getWallet();
+      if (mounted) setState(() { _walletBalance = wallet.balance; });
+    } catch (_) {}
+  }
+
+  List<_Shipment> get _activeShipments {
+    return _liveOrders
+        .where((o) {
+          final s = (o['status'] as String? ?? '').toLowerCase();
+          return s != 'delivered' && s != 'completed' && s != 'cancelled';
+        })
+        .take(5)
+        .map((o) {
+          final mode = (o['mode'] as String? ?? o['transport_mode'] as String? ?? 'road').toLowerCase();
+          final isAir   = mode == 'air';
+          final isOcean = mode == 'sea' || mode == 'ocean';
+          return _Shipment(
+            id:          o['tracking_id'] as String? ?? o['id']?.toString() ?? '--',
+            origin:      o['pickup_address'] as String? ?? o['from_city'] as String? ?? 'Origin',
+            destination: o['delivery_address'] as String? ?? o['to_city'] as String? ?? 'Destination',
+            partner:     o['partner'] as String? ?? 'JD Logistics',
+            mode:        isAir ? 'Air' : (isOcean ? 'Ocean' : 'Road'),
+            status:      _fmtStatus(o['status'] as String? ?? 'Pending'),
+            eta:         o['estimated_delivery'] as String? ?? '--',
+            progress:    0.5,
+            icon:        isAir ? Icons.flight_takeoff_rounded : (isOcean ? Icons.directions_boat_filled_rounded : Icons.local_shipping_rounded),
+            color:       isAir ? AppColors.airColor : (isOcean ? AppColors.oceanColor : AppColors.roadColor),
+          );
+        })
+        .toList();
+  }
+
+  static String _fmtStatus(String s) {
+    switch (s.toLowerCase()) {
+      case 'in_transit':       return 'In Transit';
+      case 'picked_up':        return 'Picked Up';
+      case 'out_for_delivery': return 'Out for Delivery';
+      default:                 return s[0].toUpperCase() + s.substring(1);
+    }
+  }
+
+  String get _walletDisplay {
+    if (_walletBalance >= 100000)  return '₹${(_walletBalance / 100000).toStringAsFixed(1)}L';
+    if (_walletBalance >= 1000)    return '₹${(_walletBalance / 1000).toStringAsFixed(1)}K';
+    return '₹${_walletBalance.toStringAsFixed(0)}';
+  }
+
+  int get _totalOrders    => _liveOrders.length;
+  int get _deliveredCount => _liveOrders.where((o) { final s = (o['status'] as String? ?? '').toLowerCase(); return s == 'delivered' || s == 'completed'; }).length;
+  int get _activeCount    => _liveOrders.where((o) { final s = (o['status'] as String? ?? '').toLowerCase(); return s != 'delivered' && s != 'completed' && s != 'cancelled'; }).length;
+  int get _pendingCount   => _liveOrders.where((o) => (o['status'] as String? ?? '').toLowerCase() == 'pending').length;
 
   @override
   void dispose() {
@@ -143,29 +173,52 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen>
                           const SizedBox(height: 18),
                           _ShipmentModeGrid(tablet: tablet),
                           const SizedBox(height: 18),
-                          _DashboardStats(tablet: tablet),
+                          _DashboardStats(
+                            tablet: tablet,
+                            totalOrders: _totalOrders,
+                            delivered: _deliveredCount,
+                            walletDisplay: _walletDisplay,
+                            active: _activeCount,
+                          ),
                           const SizedBox(height: 18),
                           const _SectionTitle(
                             title: 'Global Operations',
                             action: 'Live overview',
                           ),
                           const SizedBox(height: 12),
-                          _BentoGrid(wide: wide),
+                          _BentoGrid(
+                            wide: wide,
+                            active: _activeCount,
+                            pending: _pendingCount,
+                            walletDisplay: _walletDisplay,
+                          ),
                           const SizedBox(height: 18),
-                          const _SectionTitle(
+                          _SectionTitle(
                             title: 'Active Shipments',
-                            action: '3 moving now',
+                            action: _activeCount > 0 ? '$_activeCount moving' : 'None yet',
                           ),
                           const SizedBox(height: 12),
-                          ..._shipments.map(
-                            (shipment) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: _ShipmentCard(
-                                shipment: shipment,
-                                vehicleValue: _vehicleCtrl.value,
+                          if (_activeShipments.isEmpty)
+                            GlassCard(
+                              borderRadius: 24,
+                              padding: const EdgeInsets.all(24),
+                              child: Center(
+                                child: Text(
+                                  _homeLoaded ? 'No active shipments' : 'Loading…',
+                                  style: TextStyle(color: AppColors.subtext(context), fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                            )
+                          else
+                            ..._activeShipments.map(
+                              (shipment) => Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _ShipmentCard(
+                                  shipment: shipment,
+                                  vehicleValue: _vehicleCtrl.value,
+                                ),
                               ),
                             ),
-                          ),
                           const SizedBox(height: 8),
                           _GlobalStatusPanel(country: _country),
                         ],
@@ -621,16 +674,26 @@ class _ShipmentModeGrid extends StatelessWidget {
 
 class _DashboardStats extends StatelessWidget {
   final bool tablet;
+  final int totalOrders;
+  final int delivered;
+  final String walletDisplay;
+  final int active;
 
-  const _DashboardStats({required this.tablet});
+  const _DashboardStats({
+    required this.tablet,
+    required this.totalOrders,
+    required this.delivered,
+    required this.walletDisplay,
+    required this.active,
+  });
 
   @override
   Widget build(BuildContext context) {
     final items = [
-      const _StatItem('Total Shipments', '248', Icons.all_inbox_rounded),
-      const _StatItem('Delivered', '196', Icons.verified_rounded),
-      const _StatItem('Revenue', '₹8.4L', Icons.trending_up_rounded),
-      const _StatItem('Countries', '06', Icons.public_rounded),
+      _StatItem('Total Orders', '$totalOrders', Icons.all_inbox_rounded),
+      _StatItem('Delivered', '$delivered', Icons.verified_rounded),
+      _StatItem('Wallet', walletDisplay, Icons.account_balance_wallet_rounded),
+      _StatItem('Active', '$active', Icons.local_shipping_rounded),
     ];
 
     return Wrap(
@@ -699,18 +762,26 @@ class _StatCard extends StatelessWidget {
 
 class _BentoGrid extends StatelessWidget {
   final bool wide;
+  final int active;
+  final int pending;
+  final String walletDisplay;
 
-  const _BentoGrid({required this.wide});
+  const _BentoGrid({
+    required this.wide,
+    required this.active,
+    required this.pending,
+    required this.walletDisplay,
+  });
 
   @override
   Widget build(BuildContext context) {
     final items = [
-      const _BentoItem('Active Shipments', '32', 'Road, air & sea moving', Icons.local_shipping_rounded, AppColors.primary),
-      const _BentoItem('Pending Deliveries', '14', 'Warehouse dispatch queue', Icons.pending_actions_rounded, AppColors.saffron),
-      const _BentoItem('Wallet Balance', '₹12.4K', 'Ready for invoices', Icons.account_balance_wallet_rounded, AppColors.success),
-      const _BentoItem('Rewards', '860', 'JD loyalty points', Icons.workspace_premium_rounded, AppColors.oceanColor),
-      const _BentoItem('Drivers Online', '42', 'Available now', Icons.badge_rounded, AppColors.airColor),
-      const _BentoItem('Warehouse Nodes', '12', 'Connected hubs', Icons.warehouse_rounded, AppColors.portOrange),
+      _BentoItem('Active Shipments', '$active', 'Road, air & sea moving', Icons.local_shipping_rounded, AppColors.primary),
+      _BentoItem('Pending Pickups', '$pending', 'Awaiting collection', Icons.pending_actions_rounded, AppColors.saffron),
+      _BentoItem('Wallet Balance', walletDisplay, 'Ready for payments', Icons.account_balance_wallet_rounded, AppColors.success),
+      const _BentoItem('Rewards', '--', 'JD loyalty points', Icons.workspace_premium_rounded, AppColors.oceanColor),
+      const _BentoItem('Service Coverage', 'Pan-India', 'Road, Air & Sea', Icons.badge_rounded, AppColors.airColor),
+      const _BentoItem('Network Hubs', 'Active', 'Connected warehouses', Icons.warehouse_rounded, AppColors.portOrange),
     ];
 
     return GridView.builder(

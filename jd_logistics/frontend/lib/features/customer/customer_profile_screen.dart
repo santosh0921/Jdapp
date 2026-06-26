@@ -202,44 +202,11 @@ class _ProfileHero extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 alignment: WrapAlignment.center,
-                children: const [
+                children: [
                   _RegionChip(
                     icon: Icons.badge_rounded,
-                    label: 'JD-CUS-2048',
+                    label: name.isNotEmpty ? 'JD Customer' : 'JD Customer',
                     color: AppColors.primary,
-                  ),
-                  _RegionChip(
-                    icon: Icons.workspace_premium_rounded,
-                    label: 'Gold Member',
-                    color: AppColors.portOrange,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                alignment: WrapAlignment.center,
-                children: [
-                  const _RegionChip(
-                    icon: Icons.stars_rounded,
-                    label: '1240 Points',
-                    color: AppColors.saffron,
-                  ),
-                  const _RegionChip(
-                    icon: Icons.local_shipping_rounded,
-                    label: '48 Deliveries',
-                    color: AppColors.primary,
-                  ),
-                  const _RegionChip(
-                    icon: Icons.public_rounded,
-                    label: '6 Countries',
-                    color: AppColors.success,
-                  ),
-                  const _RegionChip(
-                    icon: Icons.monetization_on_rounded,
-                    label: '1250 OBC',
-                    color: AppColors.oceanColor,
                   ),
                   _RegionChip(
                     icon: Icons.flag_rounded,
@@ -249,61 +216,7 @@ class _ProfileHero extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
-              _TierProgress(),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TierProgress extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return GlassCard(
-      borderRadius: 22,
-      padding: const EdgeInsets.all(14),
-      color: AppColors.surface(context),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.workspace_premium_rounded,
-                color: AppColors.portOrange,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Gold Tier Progress',
-                  style: TextStyle(
-                    color: AppColors.text(context),
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-              const Text(
-                '1240 / 2000',
-                style: TextStyle(
-                  color: AppColors.portOrange,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(
-              value: 0.62,
-              minHeight: 9,
-              backgroundColor: AppColors.border(context),
-              valueColor: const AlwaysStoppedAnimation(AppColors.portOrange),
-            ),
           ),
         ],
       ),
@@ -330,13 +243,13 @@ class _QuickActionsGrid extends StatelessWidget {
           icon: Icons.edit_rounded,
           label: 'Edit',
           color: AppColors.primary,
-          onTap: () {},
+          onTap: () => context.push('/profile-setup'),
         ),
         _QuickAction(
           icon: Icons.location_on_rounded,
           label: 'Addresses',
           color: AppColors.success,
-          onTap: () {},
+          onTap: () => context.push('/shipment/saved-addresses'),
         ),
         _QuickAction(
           icon: Icons.stars_rounded,
@@ -454,7 +367,7 @@ class _ObcBalanceCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            '1,250 OBC',
+            'OBC Wallet',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: AppColors.text(context),
                   fontWeight: FontWeight.w900,
@@ -476,7 +389,7 @@ class _ObcBalanceCard extends StatelessWidget {
                   label: 'Use OBC',
                   icon: Icons.payments_rounded,
                   color: AppColors.primary,
-                  onTap: () {},
+                  onTap: () => context.push('/payments'),
                 ),
               ),
               const SizedBox(width: 8),
@@ -485,7 +398,7 @@ class _ObcBalanceCard extends StatelessWidget {
                   label: 'History',
                   icon: Icons.history_rounded,
                   color: AppColors.portOrange,
-                  onTap: () {},
+                  onTap: () => context.push('/payments/history'),
                 ),
               ),
             ],
@@ -777,13 +690,13 @@ class _ProfileMenuCard extends StatelessWidget {
             icon: Icons.edit_rounded,
             label: 'Edit Profile',
             trailing: 'Update',
-            onTap: () {},
+            onTap: () => context.push('/profile-setup'),
           ),
           _ProfileTile(
             icon: Icons.location_city_rounded,
             label: 'Saved Addresses',
-            trailing: '4',
-            onTap: () {},
+            trailing: '',
+            onTap: () => context.push('/shipment/saved-addresses'),
           ),
           _ProfileTile(
             icon: Icons.payment_rounded,
@@ -794,14 +707,14 @@ class _ProfileMenuCard extends StatelessWidget {
           _ProfileTile(
             icon: Icons.stars_rounded,
             label: 'Rewards & OBC',
-            trailing: '1250 OBC',
+            trailing: '',
             onTap: () => context.push('/rewards'),
           ),
           _ProfileTile(
             icon: Icons.notifications_rounded,
             label: 'Notifications',
-            trailing: '8',
-            onTap: () {},
+            trailing: '',
+            onTap: () => context.push('/notifications'),
           ),
           _ProfileTile(
             icon: Icons.language_rounded,
@@ -813,7 +726,7 @@ class _ProfileMenuCard extends StatelessWidget {
             icon: Icons.tune_rounded,
             label: 'Shipment Preferences',
             trailing: 'Road + Air',
-            onTap: () {},
+            onTap: () => context.push('/book-shipment'),
           ),
           _ProfileTile(
             icon: Icons.security_rounded,
@@ -855,23 +768,23 @@ class _SupportMenuCard extends StatelessWidget {
             icon: Icons.support_agent_rounded,
             label: 'Help & Support',
             trailing: '24x7',
-            onTap: () {},
+            onTap: () => context.push('/support'),
           ),
           _ProfileTile(
             icon: Icons.confirmation_number_rounded,
             label: 'Support Tickets',
-            trailing: '2 Open',
-            onTap: () {},
+            trailing: '',
+            onTap: () => context.push('/customer/chat-support'),
           ),
           _ProfileTile(
             icon: Icons.privacy_tip_outlined,
             label: 'Privacy Policy',
-            onTap: () {},
+            onTap: () => context.push('/support'),
           ),
           _ProfileTile(
             icon: Icons.description_outlined,
             label: 'Terms of Service',
-            onTap: () {},
+            onTap: () => context.push('/support'),
           ),
         ],
       ),

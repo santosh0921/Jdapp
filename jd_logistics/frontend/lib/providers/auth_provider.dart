@@ -198,6 +198,18 @@ class AuthProvider extends ChangeNotifier {
       _selectedServiceType = _serviceTypeForRole(finalRole);
       _status = AuthStatus.authenticated;
 
+      // When the user chose a role that differs from what the backend JWT contains,
+      // call /auth/select-role to update the DB role and re-issue a JWT that
+      // the backend middleware will accept (e.g. admin accessing /admin/* routes).
+      if (finalRole != backendRole) {
+        try {
+          await AuthService.instance.selectRole(finalRole);
+        } catch (_) {
+          // Best-effort — routing still works with locally stored role;
+          // some protected endpoints may still return 403 if role wasn't persisted.
+        }
+      }
+
       notifyListeners();
       return true;
     } catch (e) {

@@ -6,6 +6,7 @@ import 'package:jd_style_logistics/providers/theme_provider.dart';
 import 'package:jd_style_logistics/services/courier_service.dart';
 import 'package:jd_style_logistics/services/payment_service.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // Push this screen with:
 //   context.push('/courier/payment', extra: CourierPaymentArgs(...))
@@ -75,8 +76,9 @@ class _CourierPaymentScreenState extends State<CourierPaymentScreen>
       final weightNum = double.tryParse(
               widget.args.weight.replaceAll(RegExp(r'[^0-9.]'), '')) ??
           1.0;
+      final method = _methods[_selectedMethod]['label'] as String;
 
-      // 1. Create the courier order on the backend.
+      // Step 1 — Create the courier order on the backend.
       final orderData = await CourierService.instance.createOrder({
         'pickup_address': widget.args.fromCity,
         'delivery_address': widget.args.toCity,
@@ -86,7 +88,7 @@ class _CourierPaymentScreenState extends State<CourierPaymentScreen>
         'mode': widget.args.mode,
         'partner': widget.args.partner,
         'insurance': widget.args.withInsurance,
-        'payment_method': _methods[_selectedMethod]['label'] as String,
+        'payment_method': method,
         if (widget.args.notes.isNotEmpty) 'notes': widget.args.notes,
       });
 
@@ -94,22 +96,27 @@ class _CourierPaymentScreenState extends State<CourierPaymentScreen>
           orderData['tracking_id']?.toString() ??
           orderData['order_id']?.toString();
 
-      // 2. Create a payment order linked to the courier order.
-      final payData = await PaymentService.instance.createPaymentOrder(
-        orderId: realOrderId ?? widget.args.orderId,
-        amount: widget.args.totalAmount,
-        method: _methods[_selectedMethod]['label'] as String,
-      );
+      // Step 2 — Handle payment by method.
+      switch (_selectedMethod) {
+        case 0: // UPI
+          await _launchUpi(widget.args.totalAmount, realOrderId ?? widget.args.orderId);
+          break;
 
-      final paymentId = payData['payment_id'] as String? ??
-          payData['id']?.toString() ??
-          'PAY_${DateTime.now().millisecondsSinceEpoch}';
+        case 3: // JD Wallet — deduct via /payments/withdraw
+          final wallet = await PaymentService.instance.getWallet();
+          if (wallet.balance < widget.args.totalAmount) {
+            throw Exception('Insufficient wallet balance. Available: ₹${wallet.balance.toStringAsFixed(0)}');
+          }
+          await PaymentService.instance.withdraw(widget.args.totalAmount);
+          break;
 
-      // 3. Verify the payment (gateway callback / UPI verify step).
-      await PaymentService.instance.verifyPayment(
-        paymentId: paymentId,
-        orderId: realOrderId ?? widget.args.orderId,
-      );
+        case 5: // COD — no payment step needed
+          break;
+
+        default:
+          // Card / Net Banking / OBC — not yet supported without payment gateway
+          throw Exception('$method payment not yet available. Please use UPI, JD Wallet, or Cash on Delivery.');
+      }
     } catch (e) {
       errorMsg = e is ApiException ? e.message : e.toString();
     }
@@ -132,6 +139,32 @@ class _CourierPaymentScreenState extends State<CourierPaymentScreen>
     context.pushReplacement(
       '/shipment/delivery-success?id=${Uri.encodeComponent(ordId)}&mode=${widget.args.mode}',
     );
+  }
+
+  Future<void> _launchUpi(double amount, String orderId) async {
+    final amountStr = amount.toStringAsFixed(2);
+    final note = Uri.encodeComponent('JD Logistics - Order $orderId');
+    // Try app-specific schemes first, then fall back to generic upi://
+    final schemes = [
+      'gpay://upi/pay?pa=jdlogistics@okaxis&pn=JD%20Logistics&am=$amountStr&cu=INR&tn=$note',
+      'phonepe://pay?pa=jdlogistics@ybl&pn=JD%20Logistics&am=$amountStr&cu=INR&tn=$note',
+      'paytmmp://pay?pa=jdlogistics@paytm&pn=JD%20Logistics&am=$amountStr&cu=INR&tn=$note',
+      'upi://pay?pa=jdlogistics@okaxis&pn=JD%20Logistics&am=$amountStr&cu=INR&tn=$note',
+    ];
+
+    bool launched = false;
+    for (final scheme in schemes) {
+      final uri = Uri.parse(scheme);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        launched = true;
+        break;
+      }
+    }
+
+    if (!launched) {
+      throw Exception('No UPI app found. Please install GPay, PhonePe, or Paytm and try again.');
+    }
   }
 
   @override

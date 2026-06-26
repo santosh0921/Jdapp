@@ -15,16 +15,17 @@ class ApiEndpoints {
   static const String authProfile    = '/auth/profile';
   static const String setupProfile   = '/auth/setup-profile';
 
-  // ── Services ──────────────────────────────────────────────────────────────
-  static const String getServices   = '/services';
-  static const String selectService = '/services/select';
+  // ── Services / Role ───────────────────────────────────────────────────────
+  static const String getServices = '/services';
+  // Re-issues a JWT with the requested role; updates role in DB.
+  static const String selectRole  = '/auth/select-role';
 
   // ── Users ─────────────────────────────────────────────────────────────────
   static const String userProfile   = '/users/profile';
   static const String updateProfile = '/users/profile';
 
   // ── Courier Orders ────────────────────────────────────────────────────────
-  static const String courierEstimate = '/courier/orders/estimate';
+  static const String courierEstimate = '/courier/estimate';
   static const String courierOrders   = '/courier/orders';
   static String courierOrderById(String id)    => '/courier/orders/$id';
   static String cancelCourierOrder(String id)  => '/courier/orders/$id/cancel';

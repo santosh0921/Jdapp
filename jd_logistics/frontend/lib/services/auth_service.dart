@@ -65,18 +65,17 @@ class AuthService {
   }
 
   // ── Role selection ────────────────────────────────────────────────────────
-  // Role is stored locally; the backend endpoint is called best-effort.
+  // Updates the user's role in the DB and re-issues a JWT with the new role.
 
   Future<Map<String, dynamic>> selectRole(String role) async {
-    try {
-      final r = await ApiClient.instance.post(
-        ApiEndpoints.selectService,
-        data: {'role': role},
-      );
-      return r.data as Map<String, dynamic>;
-    } catch (_) {
-      return {'success': true, 'data': {'role': role}};
-    }
+    final r = await ApiClient.instance.post(
+      ApiEndpoints.selectRole,
+      data: {'role': role},
+    );
+    final body = r.data as Map<String, dynamic>;
+    final data = body['data'] as Map<String, dynamic>? ?? {};
+    await _persistTokens(data);
+    return body;
   }
 
   // ── Logout ────────────────────────────────────────────────────────────────

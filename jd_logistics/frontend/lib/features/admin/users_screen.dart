@@ -20,27 +20,9 @@ class _UsersScreenState extends State<UsersScreen>
   bool _isLoading = false;
   String? _error;
 
-  List<Map<String, String>> _customers = const [
-    {'name': 'Rajesh Kumar', 'phone': '+91 98765 43210', 'orders': '14', 'status': 'Active'},
-    {'name': 'Priya Sharma', 'phone': '+91 87654 32109', 'orders': '8',  'status': 'Active'},
-    {'name': 'Anil Mehta',   'phone': '+91 76543 21098', 'orders': '3',  'status': 'Active'},
-    {'name': 'Sunita Rao',   'phone': '+91 65432 10987', 'orders': '21', 'status': 'Active'},
-    {'name': 'Deepak Joshi', 'phone': '+91 54321 09876', 'orders': '0',  'status': 'Inactive'},
-    {'name': 'Kavya Nair',   'phone': '+91 43210 98765', 'orders': '6',  'status': 'Active'},
-  ];
-
-  List<Map<String, String>> _drivers = const [
-    {'name': 'Ramesh Sharma', 'phone': '+91 98700 12345', 'orders': '147', 'status': 'Online'},
-    {'name': 'Suresh Kumar',  'phone': '+91 87600 23456', 'orders': '89',  'status': 'Online'},
-    {'name': 'Anil Rao',      'phone': '+91 76600 34567', 'orders': '212', 'status': 'Offline'},
-    {'name': 'Priya Devi',    'phone': '+91 65600 45678', 'orders': '54',  'status': 'Online'},
-  ];
-
-  List<Map<String, String>> _warehouse = const [
-    {'name': 'Mohan Lal',    'phone': '+91 98710 55555', 'orders': 'WH-001', 'status': 'Active'},
-    {'name': 'Geetha R.',    'phone': '+91 87610 66666', 'orders': 'WH-002', 'status': 'Active'},
-    {'name': 'Ravi Shankar', 'phone': '+91 76610 77777', 'orders': 'WH-003', 'status': 'Active'},
-  ];
+  List<Map<String, String>> _customers = [];
+  List<Map<String, String>> _drivers   = [];
+  List<Map<String, String>> _warehouse = [];
 
   @override
   void initState() {

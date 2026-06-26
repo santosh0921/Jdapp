@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
+import 'package:jd_style_logistics/services/courier_service.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -24,99 +25,11 @@ class _OrdersScreenState extends State<OrdersScreen>
     language: 'English / Hindi',
   );
 
-  final _activeOrders = const [
-    _OrderData(
-      id: 'JD-IND-2048',
-      type: 'Express Parcel',
-      origin: 'Mumbai',
-      destination: 'Delhi',
-      status: 'In Transit',
-      eta: 'Today · 7:30 PM',
-      progress: 0.68,
-      icon: Icons.local_shipping_rounded,
-      color: Color(0xFF2563EB),
-      mode: _ShipmentMode.road,
-      hub: 'Mumbai Road Hub',
-      amount: '₹1,240',
-      country: 'India',
-      currency: 'INR',
-      timeline: ['Booked', 'Picked', 'In Transit', 'Delivery'],
-    ),
-    _OrderData(
-      id: 'JD-EXP-9172',
-      type: 'International',
-      origin: 'Pune',
-      destination: 'Dubai',
-      status: 'Customs Check',
-      eta: 'Jun 19 · 4:00 PM',
-      progress: 0.42,
-      icon: Icons.flight_takeoff_rounded,
-      color: Color(0xFFFF8A00),
-      mode: _ShipmentMode.air,
-      hub: 'BOM Air Cargo',
-      amount: '₹6,850',
-      country: 'UAE',
-      currency: 'AED',
-      timeline: ['Booked', 'Airport Hub', 'Customs', 'Delivery'],
-    ),
-  ];
-
-  final _deliveredOrders = const [
-    _OrderData(
-      id: 'JD-DLV-1209',
-      type: 'Document',
-      origin: 'Navi Mumbai',
-      destination: 'Thane',
-      status: 'Delivered',
-      eta: 'Jun 14 · 2:10 PM',
-      progress: 1,
-      icon: Icons.verified_rounded,
-      color: Color(0xFF16A34A),
-      mode: _ShipmentMode.road,
-      hub: 'Navi Mumbai Hub',
-      amount: '₹420',
-      country: 'India',
-      currency: 'INR',
-      timeline: ['Booked', 'Picked', 'Transit', 'Delivered'],
-    ),
-    _OrderData(
-      id: 'JD-DLV-8841',
-      type: 'Freight',
-      origin: 'Bhiwandi',
-      destination: 'Bengaluru',
-      status: 'Delivered',
-      eta: 'Jun 11 · 6:40 PM',
-      progress: 1,
-      icon: Icons.fire_truck_rounded,
-      color: Color(0xFF16A34A),
-      mode: _ShipmentMode.ocean,
-      hub: 'Container Yard',
-      amount: '₹12,900',
-      country: 'India',
-      currency: 'INR',
-      timeline: ['Loaded', 'Hub', 'Linehaul', 'Delivered'],
-    ),
-  ];
-
-  final _cancelledOrders = const [
-    _OrderData(
-      id: 'JD-CAN-3102',
-      type: 'Parcel',
-      origin: 'Mumbai',
-      destination: 'Pune',
-      status: 'Cancelled',
-      eta: 'Cancelled by customer',
-      progress: 0.12,
-      icon: Icons.cancel_rounded,
-      color: Color(0xFFEF4444),
-      mode: _ShipmentMode.road,
-      hub: 'Mumbai Hub',
-      amount: '₹0',
-      country: 'India',
-      currency: 'INR',
-      timeline: ['Booked', 'Cancelled'],
-    ),
-  ];
+  List<_OrderData> _activeOrders    = [];
+  List<_OrderData> _deliveredOrders = [];
+  List<_OrderData> _cancelledOrders = [];
+  bool _isLoading = false;
+  String? _loadError;
 
   @override
   void initState() {
@@ -126,6 +39,120 @@ class _OrdersScreenState extends State<OrdersScreen>
       vsync: this,
       duration: const Duration(seconds: 9),
     )..repeat();
+    _loadOrders();
+  }
+
+  Future<void> _loadOrders() async {
+    setState(() { _isLoading = true; _loadError = null; });
+    try {
+      final all = await CourierService.instance.getOrders(limit: 50);
+      if (!mounted) return;
+      final active    = all.where((o) => !_isDone(o['status'])).map(_fromApi).toList();
+      final delivered = all.where((o) => _isDelivered(o['status'])).map(_fromApi).toList();
+      final cancelled = all.where((o) => _isCancelled(o['status'])).map(_fromApi).toList();
+      setState(() {
+        _activeOrders    = active;
+        _deliveredOrders = delivered;
+        _cancelledOrders = cancelled;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() { _loadError = e.toString(); _isLoading = false; });
+    }
+  }
+
+  static bool _isDone(dynamic s) {
+    final v = (s as String? ?? '').toLowerCase();
+    return v == 'delivered' || v == 'completed' || v == 'cancelled';
+  }
+
+  static bool _isDelivered(dynamic s) {
+    final v = (s as String? ?? '').toLowerCase();
+    return v == 'delivered' || v == 'completed';
+  }
+
+  static bool _isCancelled(dynamic s) =>
+      (s as String? ?? '').toLowerCase() == 'cancelled';
+
+  static _OrderData _fromApi(Map<String, dynamic> o) {
+    final status = _fmtStatus(o['status'] as String? ?? 'Pending');
+    final mode   = _parseMode(o['mode'] as String? ?? o['transport_mode'] as String? ?? 'road');
+    final isCancelled = status == 'Cancelled';
+    final isDelivered = status == 'Delivered' || status == 'Completed';
+    final progress = isCancelled ? 0.1 : (isDelivered ? 1.0 : 0.5);
+    final amountRaw = o['amount'] ?? o['total_amount'] ?? 0;
+    final amount = '₹${(amountRaw as num).toStringAsFixed(0)}';
+    return _OrderData(
+      id:          o['tracking_id'] as String? ?? o['id']?.toString() ?? '--',
+      type:        _fmtType(o['package_type'] as String? ?? o['goods_type'] as String? ?? 'Parcel'),
+      origin:      o['pickup_address'] as String? ?? o['from_city'] as String? ?? 'Origin',
+      destination: o['delivery_address'] as String? ?? o['to_city'] as String? ?? 'Destination',
+      status:      status,
+      eta:         o['estimated_delivery'] as String? ?? '--',
+      progress:    progress,
+      icon:        _modeIcon(mode),
+      color:       _modeColor(mode),
+      mode:        mode,
+      hub:         o['hub'] as String? ?? o['warehouse'] as String? ?? 'JD Hub',
+      amount:      amount,
+      country:     o['country'] as String? ?? 'India',
+      currency:    o['currency'] as String? ?? 'INR',
+      timeline:    _timeline(status),
+    );
+  }
+
+  static String _fmtStatus(String s) {
+    switch (s.toLowerCase()) {
+      case 'in_transit':  return 'In Transit';
+      case 'delivered':   return 'Delivered';
+      case 'completed':   return 'Completed';
+      case 'cancelled':   return 'Cancelled';
+      case 'picked_up':   return 'Picked Up';
+      case 'out_for_delivery': return 'Out for Delivery';
+      default: return s[0].toUpperCase() + s.substring(1);
+    }
+  }
+
+  static String _fmtType(String s) {
+    switch (s.toLowerCase()) {
+      case 'document': return 'Document';
+      case 'fragile':  return 'Fragile';
+      case 'heavy':    return 'Heavy';
+      default: return 'Parcel';
+    }
+  }
+
+  static _ShipmentMode _parseMode(String s) {
+    switch (s.toLowerCase()) {
+      case 'air':   return _ShipmentMode.air;
+      case 'sea':
+      case 'ocean': return _ShipmentMode.ocean;
+      default:      return _ShipmentMode.road;
+    }
+  }
+
+  static IconData _modeIcon(_ShipmentMode m) {
+    switch (m) {
+      case _ShipmentMode.air:   return Icons.flight_takeoff_rounded;
+      case _ShipmentMode.ocean: return Icons.directions_boat_filled_rounded;
+      case _ShipmentMode.road:  return Icons.local_shipping_rounded;
+    }
+  }
+
+  static Color _modeColor(_ShipmentMode m) {
+    switch (m) {
+      case _ShipmentMode.air:   return Color(0xFFFF8A00);
+      case _ShipmentMode.ocean: return Color(0xFF0D9488);
+      case _ShipmentMode.road:  return Color(0xFF2563EB);
+    }
+  }
+
+  static List<String> _timeline(String status) {
+    if (status == 'Delivered' || status == 'Completed') {
+      return ['Booked', 'Picked', 'In Transit', 'Delivered'];
+    }
+    if (status == 'Cancelled') return ['Booked', 'Cancelled'];
+    return ['Booked', 'Picked', 'In Transit', 'Delivery'];
   }
 
   @override
@@ -158,6 +185,9 @@ class _OrdersScreenState extends State<OrdersScreen>
                 fontWeight: FontWeight.w900,
               ),
         ),
+        actions: _isLoading
+            ? [const Padding(padding: EdgeInsets.all(14), child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))]
+            : [IconButton(icon: const Icon(Icons.refresh_rounded), onPressed: _loadOrders, tooltip: 'Refresh')],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(64),
           child: Padding(
@@ -170,35 +200,54 @@ class _OrdersScreenState extends State<OrdersScreen>
         child: Stack(
           children: [
             Positioned.fill(child: _OrdersBackground(motion: _motion)),
-            TabBarView(
-              controller: _tabs,
-              children: [
-                _OrderList(
-                  title: 'Active Shipments',
-                  subtitle: 'Live orders moving through JD global network',
-                  orders: _activeOrders,
-                  allOrders: allOrders,
-                  country: _country,
-                  motion: _motion,
+            if (_loadError != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.cloud_off_rounded, size: 48, color: AppColors.error),
+                      const SizedBox(height: 16),
+                      Text('Failed to load orders', style: TextStyle(color: AppColors.text(context), fontWeight: FontWeight.w800, fontSize: 16)),
+                      const SizedBox(height: 8),
+                      Text(_loadError!, textAlign: TextAlign.center, style: TextStyle(color: AppColors.subtext(context), fontSize: 13)),
+                      const SizedBox(height: 20),
+                      ElevatedButton.icon(onPressed: _loadOrders, icon: const Icon(Icons.refresh_rounded), label: const Text('Retry')),
+                    ],
+                  ),
                 ),
-                _OrderList(
-                  title: 'Completed Orders',
-                  subtitle: 'Successfully delivered shipments and freight',
-                  orders: _deliveredOrders,
-                  allOrders: allOrders,
-                  country: _country,
-                  motion: _motion,
-                ),
-                _OrderList(
-                  title: 'Cancelled Orders',
-                  subtitle: 'Cancelled shipment history and rebooking options',
-                  orders: _cancelledOrders,
-                  allOrders: allOrders,
-                  country: _country,
-                  motion: _motion,
-                ),
-              ],
-            ),
+              )
+            else
+              TabBarView(
+                controller: _tabs,
+                children: [
+                  _OrderList(
+                    title: 'Active Shipments',
+                    subtitle: 'Live orders moving through JD global network',
+                    orders: _activeOrders,
+                    allOrders: allOrders,
+                    country: _country,
+                    motion: _motion,
+                  ),
+                  _OrderList(
+                    title: 'Completed Orders',
+                    subtitle: 'Successfully delivered shipments and freight',
+                    orders: _deliveredOrders,
+                    allOrders: allOrders,
+                    country: _country,
+                    motion: _motion,
+                  ),
+                  _OrderList(
+                    title: 'Cancelled Orders',
+                    subtitle: 'Cancelled shipment history and rebooking options',
+                    orders: _cancelledOrders,
+                    allOrders: allOrders,
+                    country: _country,
+                    motion: _motion,
+                  ),
+                ],
+              ),
           ],
         ),
       ),

@@ -73,18 +73,21 @@ class _LogisticsFreightQuoteScreenState extends State<LogisticsFreightQuoteScree
               shipmentType: _mode,
               classType: g.classType,
               isUrgent: _mode == 'air');
-    } catch (_) {
-      final weightTons = LogisticsMockData.toTons(weightKg);
-      _vehicle = LogisticsMockData.recommendVehicle(
-        weightTons: weightTons, shipmentType: _mode,
-        classType: g.classType, isUrgent: _mode == 'air',
-      );
-      _result = LogisticsMockData.calculateFreight(
-        goods: g, weightKg: weightKg,
-        distanceKm: LogisticsMockData.estimateDistance(_fromCity, _toCity),
-        vehicle: _vehicle!, isExport: true,
-        needsWarehouse: _needsWarehouse, goodsValue: goodsValue,
-      );
+    } catch (e) {
+      if (mounted) {
+        setState(() { _calculating = false; _calculated = false; });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Freight estimate failed: ${e.toString().replaceFirst('Exception: ', '')}'),
+          backgroundColor: const Color(0xFFEF4444),
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: _calculate,
+          ),
+        ));
+      }
+      return;
     }
 
     if (mounted) setState(() { _calculating = false; _calculated = true; });
