@@ -74,11 +74,11 @@ class LogisticsProfileScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 18),
-            _tile(card, text, sub, dark, Icons.business_rounded, 'Company', 'ABC Trading Co. Ltd.'),
-            _tile(card, text, sub, dark, Icons.public_rounded, 'Country', 'India'),
-            _tile(card, text, sub, dark, Icons.swap_horiz_rounded, 'Business Type', 'Import & Export'),
-            _tile(card, text, sub, dark, Icons.inventory_2_rounded, 'Cargo Type', 'General Cargo'),
-            _tile(card, text, sub, dark, Icons.location_city_rounded, 'Preferred Port', 'Mumbai JNPT'),
+            _tile(card, text, sub, dark, Icons.business_rounded, 'Company', '—'),
+            _tile(card, text, sub, dark, Icons.public_rounded, 'Country', '—'),
+            _tile(card, text, sub, dark, Icons.swap_horiz_rounded, 'Business Type', '—'),
+            _tile(card, text, sub, dark, Icons.inventory_2_rounded, 'Cargo Type', '—'),
+            _tile(card, text, sub, dark, Icons.location_city_rounded, 'Preferred Port', '—'),
             const SizedBox(height: 8),
             // Logout
             SizedBox(

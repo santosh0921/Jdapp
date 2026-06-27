@@ -346,54 +346,20 @@ class _LogisticsImportScreenState extends State<LogisticsImportScreen>
   // ── Tab 3: Active Imports ─────────────────────────────────────────────────
 
   Widget _buildActive(bool isDark, Color card, Color textPrimary, Color textSub) {
-    final imports = [
-      {'id': 'IMP-2024-041', 'origin': '🇨🇳 China', 'goods': 'CNC Machines', 'status': 'At Customs', 'color': const Color(0xFF8B5CF6), 'eta': '2 days'},
-      {'id': 'IMP-2024-038', 'origin': '🇩🇪 Germany', 'goods': 'Industrial Pumps', 'status': 'In Transit', 'color': _kBlue, 'eta': '8 days'},
-      {'id': 'IMP-2024-033', 'origin': '🇯🇵 Japan', 'goods': 'Electronics Parts', 'status': 'Port Loading', 'color': _kTeal, 'eta': '12 days'},
-      {'id': 'IMP-2024-028', 'origin': '🇺🇸 USA', 'goods': 'Medical Equipment', 'status': 'Delivered', 'color': const Color(0xFF22C55E), 'eta': 'Done'},
-    ];
-    return ListView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-      children: imports.map((imp) => Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: card,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.04), blurRadius: 6, offset: const Offset(0, 2))],
-        ),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Row(
-              children: [
-                Text(imp['id'] as String, style: TextStyle(color: textSub, fontSize: 11.5, fontWeight: FontWeight.w600)),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: (imp['color'] as Color).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-                  child: Text(imp['status'] as String, style: TextStyle(color: imp['color'] as Color, fontSize: 10, fontWeight: FontWeight.w700)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(imp['goods'] as String, style: TextStyle(color: textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
+            Icon(Icons.south_west_rounded, color: textSub, size: 48),
+            const SizedBox(height: 12),
+            Text('No active imports', style: TextStyle(color: textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
             const SizedBox(height: 4),
-            Row(
-              children: [
-                const Icon(Icons.flag_outlined, size: 14, color: _kBlue),
-                const SizedBox(width: 4),
-                Text(imp['origin'] as String, style: TextStyle(color: textSub, fontSize: 12)),
-                const SizedBox(width: 12),
-                const Icon(Icons.schedule_outlined, size: 14, color: _kTeal),
-                const SizedBox(width: 4),
-                Text('ETA: ${imp['eta']}', style: TextStyle(color: textSub, fontSize: 12)),
-              ],
-            ),
+            Text('Create an import order to see it here', style: TextStyle(color: textSub, fontSize: 13), textAlign: TextAlign.center),
           ],
         ),
-      )).toList(),
+      ),
     );
   }
 

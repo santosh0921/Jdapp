@@ -248,67 +248,20 @@ class _LogisticsWarehouseStorageScreenState extends State<LogisticsWarehouseStor
   // ── Tab 2: My Storage ─────────────────────────────────────────────────────
 
   Widget _buildMyStorage(bool isDark, Color card, Color textPrimary, Color textSub) {
-    final myStorage = [
-      {'wh': 'JD Hub Mumbai Central', 'space': '2,400', 'goods': 'Steel Coils', 'since': '01 Dec', 'expiry': '31 Dec', 'bill': '₹43,200'},
-      {'wh': 'JD Hub Delhi NCR', 'space': '800', 'goods': 'Electronics', 'since': '08 Dec', 'expiry': '08 Jan', 'bill': '₹16,000'},
-    ];
-    return ListView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: _kCyan.withValues(alpha: 0.07),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _kCyan.withValues(alpha: 0.2)),
-          ),
-          child: Row(children: [
-            const Icon(Icons.inventory_2_outlined, color: _kCyan, size: 22),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Active Storage: 2 locations', style: TextStyle(color: textPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
-              Text('Total space in use: 3,200 sq ft', style: TextStyle(color: textSub, fontSize: 12)),
-            ])),
-          ]),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.warehouse_outlined, color: textSub, size: 48),
+            const SizedBox(height: 12),
+            Text('No active storage bookings', style: TextStyle(color: textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
+            const SizedBox(height: 4),
+            Text('Book a warehouse from the Find Warehouse tab', style: TextStyle(color: textSub, fontSize: 13), textAlign: TextAlign.center),
+          ],
         ),
-        const SizedBox(height: 16),
-        ...myStorage.map((s) => Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: card,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.05), blurRadius: 8, offset: const Offset(0, 3))],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(s['wh']!, style: TextStyle(color: textPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
-              const SizedBox(height: 8),
-              _storageRow('Goods', s['goods']!, textSub, textPrimary),
-              _storageRow('Space', '${s['space']} sq ft', textSub, textPrimary),
-              _storageRow('Since', s['since']!, textSub, textPrimary),
-              _storageRow('Expiry', s['expiry']!, textSub, textPrimary),
-              const Divider(height: 16),
-              Row(children: [
-                Expanded(child: Text('Monthly Bill', style: TextStyle(color: textSub, fontSize: 13))),
-                Text(s['bill']!, style: const TextStyle(color: _kCyan, fontWeight: FontWeight.w800, fontSize: 15)),
-              ]),
-            ],
-          ),
-        )),
-      ],
-    );
-  }
-
-  Widget _storageRow(String label, String value, Color textSub, Color textPrimary) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(children: [
-        SizedBox(width: 70, child: Text(label, style: TextStyle(color: textSub, fontSize: 12))),
-        Text(value, style: TextStyle(color: textPrimary, fontSize: 12, fontWeight: FontWeight.w600)),
-      ]),
+      ),
     );
   }
 
@@ -354,7 +307,14 @@ class _LogisticsWarehouseStorageScreenState extends State<LogisticsWarehouseStor
                   Text(s['desc'] as String, style: TextStyle(color: textSub, fontSize: 12, height: 1.4)),
                   const SizedBox(height: 8),
                   GestureDetector(
-                    onTap: () {},
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text('${s['title']} request sent'),
+                        backgroundColor: s['color'] as Color,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ));
+                    },
                     child: Text('Request Service →', style: TextStyle(color: s['color'] as Color, fontWeight: FontWeight.w700, fontSize: 12)),
                   ),
                 ],

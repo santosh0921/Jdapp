@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:jd_style_logistics/providers/theme_provider.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
+import 'package:jd_style_logistics/services/logistics_service.dart';
 
 const Color _kTeal = Color(0xFF0D9488);
 const Color _kNavy = Color(0xFF0F2D5A);
@@ -19,63 +20,20 @@ class _LogisticsTrackingScreenState extends State<LogisticsTrackingScreen>
   late AnimationController _pulseCtrl;
   late Animation<double> _pulseAnim;
   final _searchCtrl = TextEditingController();
-  String _activeId = 'JDL-2024-001';
 
-  static const _shipments = [
-    {
-      'id': 'JDL-2024-001',
-      'goods': 'Steel Coils (25 MT)',
-      'origin': 'Mumbai, India',
-      'dest': 'Rotterdam, Netherlands',
-      'mode': '🚢',
-      'status': 'In Transit',
-      'statusColor': Color(0xFF3B82F6),
-      'vessel': 'MSC GÜLSÜN',
-      'eta': '28 Dec 2024',
-      'progress': 0.62,
-      'timeline': [
-        {'event': 'Order Placed', 'date': '01 Dec 10:30', 'done': true},
-        {'event': 'Pickup Completed', 'date': '02 Dec 14:15', 'done': true},
-        {'event': 'Port Entry (JNPT)', 'date': '03 Dec 09:00', 'done': true},
-        {'event': 'Customs Cleared', 'date': '04 Dec 16:45', 'done': true},
-        {'event': 'Vessel Loading', 'date': '05 Dec 08:00', 'done': true},
-        {'event': 'Departed Mumbai', 'date': '06 Dec 22:00', 'done': true},
-        {'event': 'In Transit — Arabian Sea', 'date': 'Current', 'done': false, 'active': true},
-        {'event': 'Jebel Ali Transhipment', 'date': 'Est. 14 Dec', 'done': false},
-        {'event': 'Arrived Rotterdam', 'date': 'Est. 28 Dec', 'done': false},
-        {'event': 'Customs Clearance (NL)', 'date': 'Est. 29 Dec', 'done': false},
-        {'event': 'Delivered', 'date': 'Est. 30 Dec', 'done': false},
-      ],
-    },
-    {
-      'id': 'JDL-2024-002',
-      'goods': 'Medicines (500 KG)',
-      'origin': 'Delhi, India',
-      'dest': 'Dubai, UAE',
-      'mode': '✈️',
-      'status': 'Customs Hold',
-      'statusColor': Color(0xFFFF6B00),
-      'vessel': 'Air India Cargo',
-      'eta': '23 Dec 2024',
-      'progress': 0.78,
-      'timeline': [
-        {'event': 'Order Placed', 'date': '18 Dec 09:00', 'done': true},
-        {'event': 'Pickup Completed', 'date': '18 Dec 14:00', 'done': true},
-        {'event': 'Air Waybill Issued', 'date': '19 Dec 10:30', 'done': true},
-        {'event': 'Departed Delhi (DEL)', 'date': '20 Dec 01:15', 'done': true},
-        {'event': 'Arrived Dubai (DXB)', 'date': '20 Dec 05:30', 'done': true},
-        {'event': 'Customs Hold — MOHAP Review', 'date': 'Current', 'done': false, 'active': true},
-        {'event': 'Customs Cleared', 'date': 'Est. 23 Dec', 'done': false},
-        {'event': 'Last Mile Delivery', 'date': 'Est. 23 Dec', 'done': false},
-      ],
-    },
-  ];
+  List<Map<String, dynamic>> _userOrders = [];
+  String? _activeId;
+  Map<String, dynamic>? _selectedOrder;
+  List<Map<String, dynamic>> _trackingEvents = [];
+  bool _isTracking = false;
+  String? _trackingError;
 
   @override
   void initState() {
     super.initState();
     _pulseCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat(reverse: true);
     _pulseAnim = CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut);
+    _loadUserOrders();
   }
 
   @override
@@ -85,11 +43,29 @@ class _LogisticsTrackingScreenState extends State<LogisticsTrackingScreen>
     super.dispose();
   }
 
-  Map<String, dynamic>? get _activeShipment {
+  Future<void> _loadUserOrders() async {
     try {
-      return _shipments.firstWhere((s) => s['id'] == _activeId) as Map<String, dynamic>;
-    } catch (_) {
-      return null;
+      final orders = await LogisticsService.instance.getOrders();
+      if (mounted) setState(() => _userOrders = orders);
+    } catch (_) {}
+  }
+
+  Future<void> _trackOrder(String id) async {
+    if (id.trim().isEmpty) return;
+    setState(() { _isTracking = true; _trackingError = null; _selectedOrder = null; _trackingEvents = []; });
+    try {
+      final order = await LogisticsService.instance.getOrderById(id.trim());
+      final events = await LogisticsService.instance.getTracking(id.trim());
+      if (mounted) {
+        setState(() {
+          _activeId = id.trim();
+          _selectedOrder = order;
+          _trackingEvents = events;
+          _isTracking = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() { _isTracking = false; _trackingError = 'Order not found: ${e.toString()}'; });
     }
   }
 
@@ -100,7 +76,6 @@ class _LogisticsTrackingScreenState extends State<LogisticsTrackingScreen>
     final card = isDark ? AppColors.darkCard : Colors.white;
     final textPrimary = isDark ? AppColors.textWhite : _kNavy;
     final textSub = isDark ? AppColors.darkSubtext : const Color(0xFF64748B);
-    final shipment = _activeShipment;
 
     return Scaffold(
       backgroundColor: bg,
@@ -135,18 +110,14 @@ class _LogisticsTrackingScreenState extends State<LogisticsTrackingScreen>
                       style: TextStyle(color: textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
                       decoration: InputDecoration(
                         border: InputBorder.none,
-                        hintText: 'Enter Shipment ID (e.g. JDL-2024-001)',
+                        hintText: 'Enter Order ID to track',
                         hintStyle: TextStyle(color: textSub, fontSize: 13),
                       ),
-                      onSubmitted: (v) => setState(() {
-                        _activeId = v.trim().isEmpty ? _activeId : v.trim();
-                      }),
+                      onSubmitted: (v) => _trackOrder(v),
                     ),
                   ),
                   GestureDetector(
-                    onTap: () => setState(() {
-                      _activeId = _searchCtrl.text.trim().isEmpty ? _activeId : _searchCtrl.text.trim();
-                    }),
+                    onTap: () => _trackOrder(_searchCtrl.text),
                     child: Container(
                       margin: const EdgeInsets.all(6),
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -159,55 +130,98 @@ class _LogisticsTrackingScreenState extends State<LogisticsTrackingScreen>
             ),
             const SizedBox(height: 20),
 
-            // Quick select buttons
-            _sectionLabel('My Active Shipments', textPrimary),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 38,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                children: _shipments.map((s) {
-                  final isActive = _activeId == s['id'];
-                  return GestureDetector(
-                    onTap: () => setState(() => _activeId = s['id'] as String),
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 10),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isActive ? _kTeal : card,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 2))],
-                      ),
-                      child: Text(s['id'] as String, style: TextStyle(color: isActive ? Colors.white : textSub, fontWeight: FontWeight.w700, fontSize: 12)),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            if (shipment != null) ...[
-              // Shipment header card
-              _buildShipmentCard(shipment, isDark, textPrimary, textSub),
-              const SizedBox(height: 20),
-
-              // Progress bar
-              _buildProgressBar(shipment, isDark, card, textPrimary, textSub),
-              const SizedBox(height: 20),
-
-              // Timeline
-              _sectionLabel('Tracking Timeline', textPrimary),
+            // Quick select — My Active Shipments
+            if (_userOrders.isNotEmpty) ...[
+              _sectionLabel('My Active Shipments', textPrimary),
               const SizedBox(height: 12),
-              _buildTimeline(shipment, isDark, card, textPrimary, textSub),
+              SizedBox(
+                height: 38,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  children: _userOrders.take(10).map((o) {
+                    final id = o['id']?.toString() ?? '';
+                    final isActive = _activeId == id;
+                    return GestureDetector(
+                      onTap: () {
+                        _searchCtrl.text = id;
+                        _trackOrder(id);
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 10),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isActive ? _kTeal : card,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 4, offset: const Offset(0, 2))],
+                        ),
+                        child: Text(id, style: TextStyle(color: isActive ? Colors.white : textSub, fontWeight: FontWeight.w700, fontSize: 12)),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 20),
             ],
+
+            // Loading / error / result
+            if (_isTracking)
+              const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
+            else if (_trackingError != null)
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(16)),
+                child: Column(
+                  children: [
+                    Icon(Icons.search_off, color: Colors.red.shade400, size: 36),
+                    const SizedBox(height: 8),
+                    Text(_trackingError!, style: TextStyle(color: textSub, fontSize: 13), textAlign: TextAlign.center),
+                  ],
+                ),
+              )
+            else if (_selectedOrder != null) ...[
+              _buildOrderCard(_selectedOrder!, isDark, textPrimary, textSub),
+              const SizedBox(height: 20),
+              if (_trackingEvents.isNotEmpty) ...[
+                _sectionLabel('Tracking Timeline', textPrimary),
+                const SizedBox(height: 12),
+                _buildTimeline(isDark, card, textPrimary, textSub),
+              ] else
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(16)),
+                  child: Center(child: Text('No tracking events yet', style: TextStyle(color: textSub, fontSize: 13))),
+                ),
+            ] else
+              Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(16)),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(Icons.gps_fixed_outlined, color: textSub, size: 40),
+                      const SizedBox(height: 12),
+                      Text('Enter an order ID above to track', style: TextStyle(color: textSub, fontSize: 13), textAlign: TextAlign.center),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildShipmentCard(Map<String, dynamic> s, bool isDark, Color textPrimary, Color textSub) {
+  Widget _buildOrderCard(Map<String, dynamic> order, bool isDark, Color textPrimary, Color textSub) {
+    final id = order['id']?.toString() ?? '—';
+    final status = order['status'] as String? ?? 'pending';
+    final origin = order['origin_city'] as String? ?? order['pickup_address'] as String? ?? '—';
+    final dest = order['destination_city'] as String? ?? order['delivery_address'] as String? ?? '—';
+    final goods = order['goods_description'] as String? ?? order['cargo_type'] as String? ?? '—';
+    final eta = order['estimated_delivery'] as String? ?? order['delivery_eta'] as String? ?? '—';
+    final displayStatus = _displayStatus(status);
+    final statusColor = _statusColor(status);
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -220,21 +234,21 @@ class _LogisticsTrackingScreenState extends State<LogisticsTrackingScreen>
         children: [
           Row(
             children: [
-              Text(s['mode'] as String, style: const TextStyle(fontSize: 32)),
+              const Text('📦', style: TextStyle(fontSize: 32)),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(s['id'] as String, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
-                    Text(s['goods'] as String, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                    Text(id, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+                    Text(goods, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15), overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(color: (s['statusColor'] as Color).withValues(alpha: 0.25), borderRadius: BorderRadius.circular(20), border: Border.all(color: s['statusColor'] as Color, width: 1)),
-                child: Text(s['status'] as String, style: TextStyle(color: s['statusColor'] as Color, fontWeight: FontWeight.w800, fontSize: 11)),
+                decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(20), border: Border.all(color: statusColor, width: 1)),
+                child: Text(displayStatus, style: TextStyle(color: statusColor, fontWeight: FontWeight.w800, fontSize: 11)),
               ),
             ],
           ),
@@ -247,7 +261,7 @@ class _LogisticsTrackingScreenState extends State<LogisticsTrackingScreen>
                   children: [
                     const Text('FROM', style: TextStyle(color: Colors.white60, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
                     const SizedBox(height: 2),
-                    Text(s['origin'] as String, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12)),
+                    Text(origin, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12)),
                   ],
                 ),
               ),
@@ -258,87 +272,26 @@ class _LogisticsTrackingScreenState extends State<LogisticsTrackingScreen>
                   children: [
                     const Text('TO', style: TextStyle(color: Colors.white60, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
                     const SizedBox(height: 2),
-                    Text(s['dest'] as String, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12), textAlign: TextAlign.end),
+                    Text(dest, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12), textAlign: TextAlign.end),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _infoChip('🚢 ${s['vessel']}'),
-              const SizedBox(width: 8),
-              _infoChip('📅 ETA: ${s['eta']}'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProgressBar(Map<String, dynamic> s, bool isDark, Color card, Color textPrimary, Color textSub) {
-    final progress = s['progress'] as double;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: card,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.05), blurRadius: 10, offset: const Offset(0, 3))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text('Journey Progress', style: TextStyle(color: textPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
-              const Spacer(),
-              Text('${(progress * 100).toInt()}%', style: const TextStyle(color: _kTeal, fontWeight: FontWeight.w900, fontSize: 14)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: progress,
-              backgroundColor: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.08),
-              valueColor: const AlwaysStoppedAnimation<Color>(_kTeal),
-              minHeight: 10,
+          if (eta != '—') ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.3))),
+              child: Text('📅 ETA: $eta', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
             ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Text(s['origin'] as String, style: TextStyle(color: textSub, fontSize: 11)),
-              const Spacer(),
-              AnimatedBuilder(
-                animation: _pulseAnim,
-                builder: (_, __) => Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: _kTeal.withValues(alpha: 0.1 + _pulseAnim.value * 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.gps_fixed, size: 12, color: _kTeal),
-                      SizedBox(width: 4),
-                      Text('LIVE', style: TextStyle(color: _kTeal, fontSize: 10, fontWeight: FontWeight.w800)),
-                    ],
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Text(s['dest'] as String, style: TextStyle(color: textSub, fontSize: 11), textAlign: TextAlign.end),
-            ],
-          ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildTimeline(Map<String, dynamic> s, bool isDark, Color card, Color textPrimary, Color textSub) {
-    final timeline = s['timeline'] as List;
+  Widget _buildTimeline(bool isDark, Color card, Color textPrimary, Color textSub) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -347,12 +300,13 @@ class _LogisticsTrackingScreenState extends State<LogisticsTrackingScreen>
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.05), blurRadius: 10, offset: const Offset(0, 3))],
       ),
       child: Column(
-        children: timeline.asMap().entries.map((e) {
+        children: _trackingEvents.asMap().entries.map((e) {
           final i = e.key;
-          final item = e.value as Map;
-          final done = item['done'] == true;
-          final active = item['active'] == true;
-          final isLast = i == timeline.length - 1;
+          final item = e.value;
+          final isLast = i == _trackingEvents.length - 1;
+          final isLatest = i == _trackingEvents.length - 1;
+          final eventName = item['event'] as String? ?? item['status'] as String? ?? item['description'] as String? ?? '—';
+          final dateStr = item['timestamp'] as String? ?? item['date'] as String? ?? item['created_at'] as String? ?? '—';
 
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -365,26 +319,18 @@ class _LogisticsTrackingScreenState extends State<LogisticsTrackingScreen>
                     AnimatedBuilder(
                       animation: _pulseAnim,
                       builder: (_, __) => Container(
-                        width: active ? 16 + _pulseAnim.value * 4 : 14,
-                        height: active ? 16 + _pulseAnim.value * 4 : 14,
+                        width: isLatest ? 16 + _pulseAnim.value * 4 : 14,
+                        height: isLatest ? 16 + _pulseAnim.value * 4 : 14,
                         decoration: BoxDecoration(
-                          color: done ? _kTeal : active ? _kSaffron : Colors.transparent,
+                          color: isLatest ? _kSaffron : _kTeal,
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: done ? _kTeal : active ? _kSaffron : const Color(0xFFCBD5E1),
-                            width: done ? 0 : 2,
-                          ),
-                          boxShadow: active ? [BoxShadow(color: _kSaffron.withValues(alpha: 0.4 * _pulseAnim.value), blurRadius: 8, spreadRadius: 2)] : null,
+                          boxShadow: isLatest ? [BoxShadow(color: _kSaffron.withValues(alpha: 0.4 * _pulseAnim.value), blurRadius: 8, spreadRadius: 2)] : null,
                         ),
-                        child: done ? const Icon(Icons.check, size: 9, color: Colors.white) : null,
+                        child: isLatest ? null : const Icon(Icons.check, size: 9, color: Colors.white),
                       ),
                     ),
                     if (!isLast)
-                      Container(
-                        width: 2,
-                        height: 32,
-                        color: done ? _kTeal.withValues(alpha: 0.4) : const Color(0xFFCBD5E1),
-                      ),
+                      Container(width: 2, height: 32, color: _kTeal.withValues(alpha: 0.4)),
                   ],
                 ),
               ),
@@ -395,19 +341,9 @@ class _LogisticsTrackingScreenState extends State<LogisticsTrackingScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        item['event'] as String,
-                        style: TextStyle(
-                          color: active ? _kSaffron : done ? textPrimary : textSub,
-                          fontWeight: active || done ? FontWeight.w700 : FontWeight.w400,
-                          fontSize: 13,
-                        ),
-                      ),
+                      Text(eventName, style: TextStyle(color: isLatest ? _kSaffron : textPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
                       const SizedBox(height: 2),
-                      Text(
-                        item['date'] as String,
-                        style: TextStyle(color: active ? _kSaffron.withValues(alpha: 0.7) : textSub, fontSize: 11.5),
-                      ),
+                      Text(dateStr, style: TextStyle(color: isLatest ? _kSaffron.withValues(alpha: 0.7) : textSub, fontSize: 11.5)),
                     ],
                   ),
                 ),
@@ -419,12 +355,25 @@ class _LogisticsTrackingScreenState extends State<LogisticsTrackingScreen>
     );
   }
 
-  Widget _infoChip(String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.3))),
-      child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
-    );
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'delivered': return const Color(0xFF22C55E);
+      case 'in_transit': return const Color(0xFF3B82F6);
+      case 'customs': case 'customs_hold': return _kSaffron;
+      case 'cancelled': return const Color(0xFFEF4444);
+      default: return _kTeal;
+    }
+  }
+
+  String _displayStatus(String status) {
+    switch (status) {
+      case 'in_transit': return 'In Transit';
+      case 'delivered': return 'Delivered';
+      case 'customs_hold': return 'Customs Hold';
+      case 'cancelled': return 'Cancelled';
+      case 'pending': return 'Pending';
+      default: return status.replaceAll('_', ' ');
+    }
   }
 
   Widget _sectionLabel(String label, Color textPrimary) {

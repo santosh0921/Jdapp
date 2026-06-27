@@ -107,12 +107,12 @@ class _LogisticsAnalyticsScreenState extends State<LogisticsAnalyticsScreen>
 
   Widget _buildKpiCards(bool isDark, Color card, Color textPrimary, Color textSub) {
     final kpis = [
-      {'label': 'Total Shipments', 'value': '1,248', 'change': '+12%', 'up': true, 'color': _kTeal, 'icon': Icons.local_shipping_outlined},
-      {'label': 'Total Freight Spend', 'value': '₹4.2Cr', 'change': '+8%', 'up': true, 'color': const Color(0xFF3B82F6), 'icon': Icons.currency_rupee_outlined},
-      {'label': 'Weight Moved', 'value': '8,420 MT', 'change': '+15%', 'up': true, 'color': const Color(0xFF8B5CF6), 'icon': Icons.scale_outlined},
-      {'label': 'On-Time Delivery', 'value': '94.2%', 'change': '+2.1%', 'up': true, 'color': const Color(0xFF22C55E), 'icon': Icons.check_circle_outline},
-      {'label': 'Customs Hold', 'value': '3 cases', 'change': '-2', 'up': true, 'color': _kSaffron, 'icon': Icons.gavel_outlined},
-      {'label': 'Avg Transit Days', 'value': '12.4 days', 'change': '-0.8', 'up': true, 'color': _kPink, 'icon': Icons.schedule_outlined},
+      {'label': 'Total Shipments', 'value': '0', 'change': '—', 'up': true, 'color': _kTeal, 'icon': Icons.local_shipping_outlined},
+      {'label': 'Total Freight Spend', 'value': '₹0', 'change': '—', 'up': true, 'color': const Color(0xFF3B82F6), 'icon': Icons.currency_rupee_outlined},
+      {'label': 'Weight Moved', 'value': '0 MT', 'change': '—', 'up': true, 'color': const Color(0xFF8B5CF6), 'icon': Icons.scale_outlined},
+      {'label': 'On-Time Delivery', 'value': '—', 'change': '—', 'up': true, 'color': const Color(0xFF22C55E), 'icon': Icons.check_circle_outline},
+      {'label': 'Customs Hold', 'value': '0 cases', 'change': '—', 'up': true, 'color': _kSaffron, 'icon': Icons.gavel_outlined},
+      {'label': 'Avg Transit Days', 'value': '— days', 'change': '—', 'up': true, 'color': _kPink, 'icon': Icons.schedule_outlined},
     ];
     return GridView.count(
       crossAxisCount: 2,
@@ -160,12 +160,12 @@ class _LogisticsAnalyticsScreenState extends State<LogisticsAnalyticsScreen>
 
   Widget _buildBarChart(bool isDark, Color card, Color textSub) {
     final data = [
-      {'month': 'Jul', 'value': 82},
-      {'month': 'Aug', 'value': 95},
-      {'month': 'Sep', 'value': 88},
-      {'month': 'Oct', 'value': 112},
-      {'month': 'Nov', 'value': 124},
-      {'month': 'Dec', 'value': 98},
+      {'month': 'Jul', 'value': 0},
+      {'month': 'Aug', 'value': 0},
+      {'month': 'Sep', 'value': 0},
+      {'month': 'Oct', 'value': 0},
+      {'month': 'Nov', 'value': 0},
+      {'month': 'Dec', 'value': 0},
     ];
     final maxVal = data.map((d) => d['value'] as int).reduce((a, b) => a > b ? a : b);
 
@@ -218,12 +218,12 @@ class _LogisticsAnalyticsScreenState extends State<LogisticsAnalyticsScreen>
 
   Widget _buildSpendChart(bool isDark, Color card, Color textSub) {
     final data = [
-      {'month': 'Jul', 'value': 0.62},
-      {'month': 'Aug', 'value': 0.71},
-      {'month': 'Sep', 'value': 0.68},
-      {'month': 'Oct', 'value': 0.84},
-      {'month': 'Nov', 'value': 0.91},
-      {'month': 'Dec', 'value': 0.74},
+      {'month': 'Jul', 'value': 0.0},
+      {'month': 'Aug', 'value': 0.0},
+      {'month': 'Sep', 'value': 0.0},
+      {'month': 'Oct', 'value': 0.0},
+      {'month': 'Nov', 'value': 0.0},
+      {'month': 'Dec', 'value': 0.0},
     ];
     final maxVal = data.map((d) => d['value'] as double).reduce((a, b) => a > b ? a : b);
 
@@ -273,10 +273,10 @@ class _LogisticsAnalyticsScreenState extends State<LogisticsAnalyticsScreen>
 
   Widget _buildModeSplit(bool isDark, Color card, Color textPrimary, Color textSub) {
     final modes = [
-      {'mode': 'Sea', 'pct': 0.62, 'color': const Color(0xFF3B82F6), 'emoji': '🚢'},
-      {'mode': 'Road', 'pct': 0.22, 'color': _kSaffron, 'emoji': '🚛'},
-      {'mode': 'Air', 'pct': 0.10, 'color': const Color(0xFF8B5CF6), 'emoji': '✈️'},
-      {'mode': 'Rail', 'pct': 0.06, 'color': _kTeal, 'emoji': '🚂'},
+      {'mode': 'Sea', 'pct': 0.0, 'color': const Color(0xFF3B82F6), 'emoji': '🚢'},
+      {'mode': 'Road', 'pct': 0.0, 'color': _kSaffron, 'emoji': '🚛'},
+      {'mode': 'Air', 'pct': 0.0, 'color': const Color(0xFF8B5CF6), 'emoji': '✈️'},
+      {'mode': 'Rail', 'pct': 0.0, 'color': _kTeal, 'emoji': '🚂'},
     ];
     return Container(
       padding: const EdgeInsets.all(16),
@@ -319,58 +319,25 @@ class _LogisticsAnalyticsScreenState extends State<LogisticsAnalyticsScreen>
   }
 
   Widget _buildTopCorridors(bool isDark, Color card, Color textPrimary, Color textSub) {
-    final corridors = [
-      {'route': 'Mumbai → Rotterdam', 'shipments': 48, 'value': '₹1.2Cr', 'mode': '🚢'},
-      {'route': 'Delhi → Dubai', 'shipments': 35, 'value': '₹84L', 'mode': '✈️'},
-      {'route': 'Chennai → Singapore', 'shipments': 28, 'value': '₹62L', 'mode': '🚢'},
-      {'route': 'Kolkata → Hamburg', 'shipments': 22, 'value': '₹48L', 'mode': '🚢'},
-      {'route': 'Bengaluru → USA', 'shipments': 18, 'value': '₹95L', 'mode': '✈️'},
-    ];
     return Container(
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: card,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.05), blurRadius: 10, offset: const Offset(0, 3))],
       ),
-      child: Column(
-        children: corridors.asMap().entries.map((e) {
-          final c = e.value;
-          final isLast = e.key == corridors.length - 1;
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              border: isLast ? null : Border(bottom: BorderSide(color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.05))),
-            ),
-            child: Row(
-              children: [
-                Text(c['mode'] as String, style: const TextStyle(fontSize: 20)),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(c['route'] as String, style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
-                      Text('${c['shipments']} shipments', style: TextStyle(color: textSub, fontSize: 11.5)),
-                    ],
-                  ),
-                ),
-                Text(c['value'] as String, style: const TextStyle(color: _kTeal, fontWeight: FontWeight.w700, fontSize: 13)),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
+      child: Center(child: Text('No corridor data available', style: TextStyle(color: textSub, fontSize: 13))),
     );
   }
 
   Widget _buildCountryDist(bool isDark, Color card, Color textPrimary, Color textSub) {
     final countries = [
-      {'flag': '🇦🇪', 'name': 'UAE', 'pct': 0.24, 'color': _kSaffron},
-      {'flag': '🇩🇪', 'name': 'Germany', 'pct': 0.18, 'color': const Color(0xFF3B82F6)},
-      {'flag': '🇺🇸', 'name': 'USA', 'pct': 0.15, 'color': _kPink},
-      {'flag': '🇸🇬', 'name': 'Singapore', 'pct': 0.13, 'color': const Color(0xFF22C55E)},
-      {'flag': '🇨🇳', 'name': 'China', 'pct': 0.10, 'color': const Color(0xFFEF4444)},
-      {'flag': '🌍', 'name': 'Others', 'pct': 0.20, 'color': const Color(0xFF64748B)},
+      {'flag': '🇦🇪', 'name': 'UAE', 'pct': 0.0, 'color': _kSaffron},
+      {'flag': '🇩🇪', 'name': 'Germany', 'pct': 0.0, 'color': const Color(0xFF3B82F6)},
+      {'flag': '🇺🇸', 'name': 'USA', 'pct': 0.0, 'color': _kPink},
+      {'flag': '🇸🇬', 'name': 'Singapore', 'pct': 0.0, 'color': const Color(0xFF22C55E)},
+      {'flag': '🇨🇳', 'name': 'China', 'pct': 0.0, 'color': const Color(0xFFEF4444)},
+      {'flag': '🌍', 'name': 'Others', 'pct': 0.0, 'color': const Color(0xFF64748B)},
     ];
     return Container(
       padding: const EdgeInsets.all(16),
@@ -412,41 +379,14 @@ class _LogisticsAnalyticsScreenState extends State<LogisticsAnalyticsScreen>
   }
 
   Widget _buildGoodsPerformance(bool isDark, Color card, Color textPrimary, Color textSub) {
-    final goods = [
-      {'name': 'Metals', 'emoji': '🔩', 'shipments': 312, 'value': '₹1.8Cr', 'change': '+18%'},
-      {'name': 'Textiles', 'emoji': '🧶', 'shipments': 248, 'value': '₹62L', 'change': '+8%'},
-      {'name': 'Electronics', 'emoji': '💻', 'shipments': 186, 'value': '₹2.4Cr', 'change': '+24%'},
-      {'name': 'Pharmaceuticals', 'emoji': '💊', 'shipments': 142, 'value': '₹3.1Cr', 'change': '+32%'},
-      {'name': 'Food / Agro', 'emoji': '🌾', 'shipments': 198, 'value': '₹48L', 'change': '+5%'},
-    ];
-    return Column(
-      children: goods.map((g) => Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: card,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.04), blurRadius: 6, offset: const Offset(0, 2))],
-        ),
-        child: Row(
-          children: [
-            Text(g['emoji'] as String, style: const TextStyle(fontSize: 24)),
-            const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(g['name'] as String, style: TextStyle(color: textPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
-              Text('${g['shipments']} shipments', style: TextStyle(color: textSub, fontSize: 11.5)),
-            ])),
-            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text(g['value'] as String, style: const TextStyle(color: _kTeal, fontWeight: FontWeight.w800, fontSize: 14)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: const Color(0xFF22C55E).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
-                child: Text(g['change'] as String, style: const TextStyle(color: Color(0xFF22C55E), fontSize: 10, fontWeight: FontWeight.w700)),
-              ),
-            ]),
-          ],
-        ),
-      )).toList(),
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: card,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.04), blurRadius: 6, offset: const Offset(0, 2))],
+      ),
+      child: Center(child: Text('No goods data available', style: TextStyle(color: textSub, fontSize: 13))),
     );
   }
 

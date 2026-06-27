@@ -3,11 +3,35 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
 import 'package:jd_style_logistics/providers/theme_provider.dart';
+import 'package:jd_style_logistics/services/logistics_service.dart';
 
 const _kLogisticsColor = Color(0xFF0D9488);
 
-class LogisticsCargoScreen extends StatelessWidget {
+class LogisticsCargoScreen extends StatefulWidget {
   const LogisticsCargoScreen({super.key});
+  @override
+  State<LogisticsCargoScreen> createState() => _LogisticsCargoScreenState();
+}
+
+class _LogisticsCargoScreenState extends State<LogisticsCargoScreen> {
+  List<Map<String, dynamic>> _orders = [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrders();
+  }
+
+  Future<void> _loadOrders() async {
+    try {
+      final orders = await LogisticsService.instance.getOrders();
+      if (mounted) setState(() { _orders = orders; _isLoading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _isLoading = false; });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -16,13 +40,6 @@ class LogisticsCargoScreen extends StatelessWidget {
     final card = dark ? AppColors.darkCard : Colors.white;
     final text = dark ? Colors.white : AppColors.textDark;
     final sub = dark ? AppColors.darkSubtext : AppColors.textDarkSecondary;
-
-    final containers = [
-      _Container('CNT-4501', '40ft HC', '28,000 kg', 'Mumbai Port', 'Loaded', AppColors.success),
-      _Container('CNT-3892', '20ft STD', '14,500 kg', 'JNPT', 'In Transit', AppColors.primary),
-      _Container('CNT-5103', 'LCL Slot', '3,200 kg', 'Chennai', 'Pending', AppColors.warning),
-      _Container('CNT-2744', 'Bulk Pallet', '6,800 kg', 'Delhi ICD', 'Customs', _kLogisticsColor),
-    ];
 
     return Scaffold(
       backgroundColor: bg,
@@ -41,83 +58,145 @@ class LogisticsCargoScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Weight calculator card
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF162233), _kLogisticsColor],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+            GestureDetector(
+              onTap: () => context.push('/logistics/freight-quote'),
+              child: Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF162233), _kLogisticsColor],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(22),
                 ),
-                borderRadius: BorderRadius.circular(22),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.calculate_rounded, color: Colors.white, size: 28),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Cargo Calculator', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
-                        Text('Calculate freight & container requirements', style: TextStyle(color: Colors.white70, fontSize: 11)),
-                      ],
+                child: Row(
+                  children: [
+                    const Icon(Icons.calculate_rounded, color: Colors.white, size: 28),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Cargo Calculator', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                          Text('Calculate freight & container requirements', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                        ],
+                      ),
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
-                    child: const Text('Open', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
-                  ),
-                ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
+                      child: const Text('Open', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 18),
-            Text('Active Containers', style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w800)),
+            Text('Active Cargo', style: TextStyle(color: text, fontSize: 15, fontWeight: FontWeight.w800)),
             const SizedBox(height: 12),
-            ...containers.map((c) => Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: card,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: dark ? 0.2 : 0.05), blurRadius: 6, offset: const Offset(0, 2))],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(color: _kLogisticsColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-                    child: const Icon(Icons.directions_boat_rounded, color: _kLogisticsColor, size: 22),
+            if (_isLoading)
+              const Center(child: Padding(padding: EdgeInsets.all(32), child: CircularProgressIndicator()))
+            else if (_error != null)
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(18)),
+                child: Column(
+                  children: [
+                    Icon(Icons.error_outline, color: Colors.red.shade400, size: 36),
+                    const SizedBox(height: 8),
+                    Text('Failed to load cargo', style: TextStyle(color: text, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 4),
+                    Text(_error!, style: TextStyle(color: sub, fontSize: 12), textAlign: TextAlign.center),
+                    const SizedBox(height: 12),
+                    ElevatedButton(onPressed: () { setState(() { _isLoading = true; _error = null; }); _loadOrders(); }, child: const Text('Retry')),
+                  ],
+                ),
+              )
+            else if (_orders.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(18)),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(Icons.directions_boat_outlined, color: sub, size: 40),
+                      const SizedBox(height: 12),
+                      Text('No active cargo', style: TextStyle(color: text, fontWeight: FontWeight.w700, fontSize: 14)),
+                      const SizedBox(height: 4),
+                      Text('Your shipment orders will appear here', style: TextStyle(color: sub, fontSize: 12)),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(c.id, style: TextStyle(color: text, fontWeight: FontWeight.w800, fontSize: 13)),
-                        Text('${c.type}  ·  ${c.weight}  ·  ${c.port}', style: TextStyle(color: sub, fontSize: 11), overflow: TextOverflow.ellipsis),
-                      ],
-                    ),
+                ),
+              )
+            else
+              ..._orders.map((o) {
+                final id = o['id']?.toString() ?? '—';
+                final status = o['status'] as String? ?? 'pending';
+                final cargoType = o['cargo_type'] as String? ?? o['goods_description'] as String? ?? '—';
+                final origin = o['origin_city'] as String? ?? o['pickup_address'] as String? ?? '—';
+                final statusColor = _statusColor(status);
+                final displayStatus = _displayStatus(status);
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: card,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: dark ? 0.2 : 0.05), blurRadius: 6, offset: const Offset(0, 2))],
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: c.statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                    child: Text(c.status, style: TextStyle(color: c.statusColor, fontSize: 10, fontWeight: FontWeight.w800)),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(color: _kLogisticsColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                        child: const Icon(Icons.directions_boat_rounded, color: _kLogisticsColor, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(id, style: TextStyle(color: text, fontWeight: FontWeight.w800, fontSize: 13)),
+                            Text('$cargoType  ·  $origin', style: TextStyle(color: sub, fontSize: 11), overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                        child: Text(displayStatus, style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w800)),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            )),
+                );
+              }),
           ],
         ),
       ),
     );
   }
-}
 
-class _Container {
-  final String id, type, weight, port, status;
-  final Color statusColor;
-  const _Container(this.id, this.type, this.weight, this.port, this.status, this.statusColor);
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'delivered': return AppColors.success;
+      case 'in_transit': return AppColors.primary;
+      case 'customs': case 'customs_hold': return AppColors.warning;
+      case 'cancelled': return Colors.red;
+      default: return _kLogisticsColor;
+    }
+  }
+
+  String _displayStatus(String status) {
+    switch (status) {
+      case 'in_transit': return 'In Transit';
+      case 'delivered': return 'Delivered';
+      case 'customs_hold': return 'Customs';
+      case 'cancelled': return 'Cancelled';
+      case 'pending': return 'Pending';
+      default: return status.replaceAll('_', ' ');
+    }
+  }
 }

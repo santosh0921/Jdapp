@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:jd_style_logistics/providers/theme_provider.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
+import 'package:jd_style_logistics/services/logistics_service.dart';
 
 const Color _kTeal = Color(0xFF0D9488);
 const Color _kNavy = Color(0xFF0F2D5A);
@@ -23,6 +24,9 @@ class _LogisticsHomeScreenState extends State<LogisticsHomeScreen>
   late Animation<double> _pulseAnim;
   late Animation<double> _fadeAnim;
 
+  List<Map<String, dynamic>> _orders = [];
+  bool _ordersLoading = true;
+
   @override
   void initState() {
     super.initState();
@@ -33,6 +37,16 @@ class _LogisticsHomeScreenState extends State<LogisticsHomeScreen>
     _pulseAnim = CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut);
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _fadeCtrl.forward();
+    _loadOrders();
+  }
+
+  Future<void> _loadOrders() async {
+    try {
+      final orders = await LogisticsService.instance.getOrders();
+      if (mounted) setState(() { _orders = orders; _ordersLoading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _ordersLoading = false);
+    }
   }
 
   @override
@@ -249,11 +263,16 @@ class _LogisticsHomeScreenState extends State<LogisticsHomeScreen>
   // ── KPI Row ────────────────────────────────────────────────────────────────
 
   Widget _buildKpiRow(bool isDark, Color card, Color textPrimary, Color textSub) {
+    final active = _orders.where((o) => !['delivered', 'cancelled'].contains(o['status'] as String? ?? '')).length;
+    final inTransit = _orders.where((o) => (o['status'] as String? ?? '') == 'in_transit').length;
+    final delivered = _orders.where((o) => (o['status'] as String? ?? '') == 'delivered').length;
+    final customs = _orders.where((o) => ['customs', 'customs_hold'].contains(o['status'] as String? ?? '')).length;
+
     final kpis = [
-      {'label': 'Active', 'value': '24', 'icon': Icons.local_shipping_outlined, 'color': _kTeal},
-      {'label': 'In Transit', 'value': '11', 'icon': Icons.directions_boat_outlined, 'color': const Color(0xFF3B82F6)},
-      {'label': 'Delivered', 'value': '138', 'icon': Icons.check_circle_outline, 'color': const Color(0xFF22C55E)},
-      {'label': 'Customs', 'value': '3', 'icon': Icons.gavel_outlined, 'color': _kSaffron},
+      {'label': 'Active', 'value': _ordersLoading ? '—' : '$active', 'icon': Icons.local_shipping_outlined, 'color': _kTeal},
+      {'label': 'In Transit', 'value': _ordersLoading ? '—' : '$inTransit', 'icon': Icons.directions_boat_outlined, 'color': const Color(0xFF3B82F6)},
+      {'label': 'Delivered', 'value': _ordersLoading ? '—' : '$delivered', 'icon': Icons.check_circle_outline, 'color': const Color(0xFF22C55E)},
+      {'label': 'Customs', 'value': _ordersLoading ? '—' : '$customs', 'icon': Icons.gavel_outlined, 'color': _kSaffron},
     ];
     return Row(
       children: kpis.asMap().entries.map((entry) {
@@ -378,59 +397,103 @@ class _LogisticsHomeScreenState extends State<LogisticsHomeScreen>
   // ── Active Shipments ───────────────────────────────────────────────────────
 
   Widget _buildActiveShipments(bool isDark, Color card, Color textPrimary, Color textSub) {
-    final shipments = [
-      {'id': 'JDL-2024-001', 'route': 'Mumbai → Rotterdam', 'mode': '🚢', 'status': 'In Transit', 'statusColor': const Color(0xFF3B82F6), 'goods': 'Steel Coils', 'eta': '28 Dec'},
-      {'id': 'JDL-2024-002', 'route': 'Delhi → Dubai', 'mode': '✈️', 'status': 'Customs Hold', 'statusColor': _kSaffron, 'goods': 'Medicines', 'eta': '23 Dec'},
-      {'id': 'JDL-2024-003', 'route': 'Chennai → Singapore', 'mode': '🚢', 'status': 'Port Loading', 'statusColor': _kTeal, 'goods': 'Cotton Fabric', 'eta': '30 Dec'},
-      {'id': 'JDL-2024-004', 'route': 'Kolkata → Hamburg', 'mode': '🚢', 'status': 'Delivered', 'statusColor': const Color(0xFF22C55E), 'goods': 'Textiles', 'eta': 'Done'},
-    ];
-    return Column(
-      children: shipments.map((s) => GestureDetector(
-        onTap: () => context.push('/logistics/tracking'),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: card,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.05), blurRadius: 8, offset: const Offset(0, 3))],
-          ),
-          child: Row(
+    if (_ordersLoading) {
+      return const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()));
+    }
+    if (_orders.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(14)),
+        child: Center(
+          child: Column(
             children: [
-              Text(s['mode'] as String, style: const TextStyle(fontSize: 26)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(s['id'] as String, style: TextStyle(color: textSub, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.3)),
-                    const SizedBox(height: 2),
-                    Text(s['route'] as String, style: TextStyle(color: textPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
-                    const SizedBox(height: 2),
-                    Text(s['goods'] as String, style: TextStyle(color: textSub, fontSize: 11.5)),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: (s['statusColor'] as Color).withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(s['status'] as String, style: TextStyle(color: s['statusColor'] as Color, fontSize: 10, fontWeight: FontWeight.w700)),
-                  ),
-                  const SizedBox(height: 4),
-                  Text('ETA: ${s['eta']}', style: TextStyle(color: textSub, fontSize: 10.5)),
-                ],
-              ),
+              Icon(Icons.local_shipping_outlined, color: textSub, size: 36),
+              const SizedBox(height: 8),
+              Text('No active shipments', style: TextStyle(color: textSub, fontSize: 13)),
             ],
           ),
         ),
-      )).toList(),
+      );
+    }
+    return Column(
+      children: _orders.take(5).map((o) {
+        final id = o['id']?.toString() ?? '—';
+        final status = o['status'] as String? ?? 'pending';
+        final origin = o['origin_city'] as String? ?? o['pickup_address'] as String? ?? '—';
+        final dest = o['destination_city'] as String? ?? o['delivery_address'] as String? ?? '—';
+        final goods = o['goods_description'] as String? ?? o['cargo_type'] as String? ?? '—';
+        final eta = o['estimated_delivery'] as String? ?? o['delivery_eta'] as String? ?? '—';
+        final statusColor = _kpiStatusColor(status);
+        final displayStatus = _kpiDisplayStatus(status);
+
+        return GestureDetector(
+          onTap: () => context.push('/logistics/tracking'),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: card,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.15 : 0.05), blurRadius: 8, offset: const Offset(0, 3))],
+            ),
+            child: Row(
+              children: [
+                const Text('📦', style: TextStyle(fontSize: 26)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(id, style: TextStyle(color: textSub, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.3)),
+                      const SizedBox(height: 2),
+                      Text('$origin → $dest', style: TextStyle(color: textPrimary, fontWeight: FontWeight.w700, fontSize: 13), overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 2),
+                      Text(goods, style: TextStyle(color: textSub, fontSize: 11.5), overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(displayStatus, style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.w700)),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('ETA: $eta', style: TextStyle(color: textSub, fontSize: 10.5)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
+  }
+
+  Color _kpiStatusColor(String status) {
+    switch (status) {
+      case 'delivered': return const Color(0xFF22C55E);
+      case 'in_transit': return const Color(0xFF3B82F6);
+      case 'customs': case 'customs_hold': return _kSaffron;
+      case 'cancelled': return const Color(0xFFEF4444);
+      default: return _kTeal;
+    }
+  }
+
+  String _kpiDisplayStatus(String status) {
+    switch (status) {
+      case 'in_transit': return 'In Transit';
+      case 'delivered': return 'Delivered';
+      case 'customs_hold': return 'Customs Hold';
+      case 'cancelled': return 'Cancelled';
+      case 'pending': return 'Pending';
+      default: return status.replaceAll('_', ' ');
+    }
   }
 
   // ── Network Highlights ─────────────────────────────────────────────────────

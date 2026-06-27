@@ -42,7 +42,7 @@ class _LogisticsExportScreenState extends State<LogisticsExportScreen>
   void initState() {
     super.initState();
     _tab = TabController(length: 3, vsync: this);
-    _selectedGoods = LogisticsMockData.goodsByCategory(_goodsCategory).first;
+    _selectedGoods = LogisticsMockData.goodsByCategory(_goodsCategory).firstOrNull;
   }
 
   @override
@@ -197,7 +197,7 @@ class _LogisticsExportScreenState extends State<LogisticsExportScreen>
             isDark: isDark, card: card, textPrimary: textPrimary,
             onChanged: (v) => setState(() {
               _goodsCategory = v ?? _goodsCategory;
-              _selectedGoods = LogisticsMockData.goodsByCategory(_goodsCategory).first;
+              _selectedGoods = LogisticsMockData.goodsByCategory(_goodsCategory).firstOrNull;
             }),
           ),
           const SizedBox(height: 20),
@@ -338,50 +338,20 @@ class _LogisticsExportScreenState extends State<LogisticsExportScreen>
   }
 
   Widget _buildActive(bool isDark, Color card, Color textPrimary, Color textSub) {
-    final exports = [
-      {'id': 'EXP-2024-087', 'dest': '🇺🇸 USA', 'goods': 'Cotton Garments', 'status': 'Customs Cleared', 'color': _kTeal, 'eta': '18 days'},
-      {'id': 'EXP-2024-082', 'dest': '🇦🇪 UAE', 'goods': 'Basmati Rice', 'status': 'In Transit', 'color': const Color(0xFF3B82F6), 'eta': '5 days'},
-      {'id': 'EXP-2024-074', 'dest': '🇩🇪 Germany', 'goods': 'Auto Parts', 'status': 'Port Loading', 'color': _kGreen, 'eta': '22 days'},
-      {'id': 'EXP-2024-069', 'dest': '🇬🇧 UK', 'goods': 'Pharmaceuticals', 'status': 'Delivered', 'color': const Color(0xFF22C55E), 'eta': 'Done'},
-    ];
-    return ListView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-      children: exports.map((exp) => Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: card,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: isDark ? 0.12 : 0.04), blurRadius: 6, offset: const Offset(0, 2))],
-        ),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Row(children: [
-              Text(exp['id'] as String, style: TextStyle(color: textSub, fontSize: 11.5, fontWeight: FontWeight.w600)),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: (exp['color'] as Color).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
-                child: Text(exp['status'] as String, style: TextStyle(color: exp['color'] as Color, fontSize: 10, fontWeight: FontWeight.w700)),
-              ),
-            ]),
-            const SizedBox(height: 8),
-            Text(exp['goods'] as String, style: TextStyle(color: textPrimary, fontWeight: FontWeight.w700, fontSize: 14)),
+            Icon(Icons.north_east_rounded, color: textSub, size: 48),
+            const SizedBox(height: 12),
+            Text('No active exports', style: TextStyle(color: textPrimary, fontWeight: FontWeight.w700, fontSize: 15)),
             const SizedBox(height: 4),
-            Row(children: [
-              const Icon(Icons.flag_outlined, size: 14, color: _kGreen),
-              const SizedBox(width: 4),
-              Text(exp['dest'] as String, style: TextStyle(color: textSub, fontSize: 12)),
-              const SizedBox(width: 12),
-              const Icon(Icons.schedule_outlined, size: 14, color: _kTeal),
-              const SizedBox(width: 4),
-              Text('ETA: ${exp['eta']}', style: TextStyle(color: textSub, fontSize: 12)),
-            ]),
+            Text('Create an export order to see it here', style: TextStyle(color: textSub, fontSize: 13), textAlign: TextAlign.center),
           ],
         ),
-      )).toList(),
+      ),
     );
   }
 
