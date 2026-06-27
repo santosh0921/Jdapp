@@ -4,6 +4,7 @@ import 'package:jd_style_logistics/core/constants/app_colors.dart';
 import 'package:jd_style_logistics/core/widgets/glass_card.dart';
 import 'package:jd_style_logistics/core/widgets/logistics_status_chip.dart';
 import 'package:jd_style_logistics/core/widgets/theme_toggle_button.dart';
+import 'package:jd_style_logistics/services/courier_service.dart';
 
 class ShipmentHistoryScreen extends StatefulWidget {
   const ShipmentHistoryScreen({super.key});
@@ -39,34 +40,15 @@ class _ShipmentHistoryScreenState extends State<ShipmentHistoryScreen>
   late final TabController _tabs;
   String _search = '';
 
-  static const _items = [
-    _HistoryItem(id: 'JD-IND-2048', from: 'Mumbai', to: 'Delhi',
-        mode: 'Road', status: 'In Transit', date: 'Jun 18, 2026',
-        amount: 1952, partner: 'Blue Dart'),
-    _HistoryItem(id: 'JD-AIR-9172', from: 'Mumbai', to: 'Singapore',
-        mode: 'Air', status: 'Customs', date: 'Jun 15, 2026',
-        amount: 8420, partner: 'DHL Express'),
-    _HistoryItem(id: 'JD-SEA-6021', from: 'JNPT', to: 'Dubai Port',
-        mode: 'Ocean', status: 'In Transit', date: 'Jun 10, 2026',
-        amount: 3280, partner: 'Maersk'),
-    _HistoryItem(id: 'JD-IND-1987', from: 'Delhi', to: 'Bangalore',
-        mode: 'Road', status: 'Delivered', date: 'Jun 5, 2026',
-        amount: 1140, partner: 'Delhivery'),
-    _HistoryItem(id: 'JD-AIR-8834', from: 'Chennai', to: 'London',
-        mode: 'Air', status: 'Delivered', date: 'May 28, 2026',
-        amount: 11200, partner: 'Emirates SkyCargo'),
-    _HistoryItem(id: 'JD-IND-1765', from: 'Pune', to: 'Hyderabad',
-        mode: 'Road', status: 'Delivered', date: 'May 20, 2026',
-        amount: 680, partner: 'DTDC'),
-    _HistoryItem(id: 'JD-SEA-5540', from: 'Kolkata', to: 'Shanghai',
-        mode: 'Ocean', status: 'Delayed', date: 'May 15, 2026',
-        amount: 4900, partner: 'MSC'),
-  ];
+  List<_HistoryItem> _liveItems = [];
+  bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 4, vsync: this);
+    _loadHistory();
   }
 
   @override
@@ -75,8 +57,65 @@ class _ShipmentHistoryScreenState extends State<ShipmentHistoryScreen>
     super.dispose();
   }
 
+  Future<void> _loadHistory() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final all = await CourierService.instance.getOrders(limit: 100);
+      if (!mounted) return;
+      setState(() {
+        _liveItems = all.map(_fromApi).toList();
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  static _HistoryItem _fromApi(Map<String, dynamic> o) {
+    final rawMode = (o['mode'] as String? ?? o['transport_mode'] as String? ?? 'road').toLowerCase();
+    final mode = rawMode.contains('air')
+        ? 'Air'
+        : (rawMode.contains('ocean') || rawMode.contains('sea'))
+            ? 'Ocean'
+            : 'Road';
+    final rawDate = o['created_at'] as String?;
+    final date = rawDate != null ? _fmtDate(rawDate) : '—';
+    return _HistoryItem(
+      id: o['tracking_id'] as String? ?? o['id']?.toString() ?? '—',
+      from: o['pickup_address'] as String? ?? o['from_city'] as String? ?? '—',
+      to: o['delivery_address'] as String? ?? o['to_city'] as String? ?? '—',
+      mode: mode,
+      status: _fmtStatus(o['status'] as String? ?? 'Pending'),
+      date: date,
+      amount: (o['amount'] as num? ?? o['total_amount'] as num? ?? 0).toDouble(),
+      partner: mode == 'Air' ? 'Air Freight' : mode == 'Ocean' ? 'Ocean Freight' : 'Road Freight',
+    );
+  }
+
+  static String _fmtDate(String raw) {
+    try {
+      final dt = DateTime.parse(raw).toLocal();
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  static String _fmtStatus(String s) {
+    final v = s.toLowerCase();
+    if (v.contains('transit')) return 'In Transit';
+    if (v.contains('deliver')) return 'Delivered';
+    if (v.contains('cancel')) return 'Cancelled';
+    if (v.contains('pickup') || v.contains('pick')) return 'Picked Up';
+    if (v.contains('custom')) return 'Customs';
+    if (v.contains('delay')) return 'Delayed';
+    if (v.contains('book') || v.contains('pending')) return 'Booked';
+    return s;
+  }
+
   List<_HistoryItem> _filtered(String? mode) {
-    var list = _items.where((i) {
+    return _liveItems.where((i) {
       if (_search.isNotEmpty &&
           !i.id.toLowerCase().contains(_search.toLowerCase()) &&
           !i.from.toLowerCase().contains(_search.toLowerCase()) &&
@@ -86,7 +125,6 @@ class _ShipmentHistoryScreenState extends State<ShipmentHistoryScreen>
       if (mode != null) return i.mode == mode;
       return true;
     }).toList();
-    return list;
   }
 
   @override
@@ -107,11 +145,17 @@ class _ShipmentHistoryScreenState extends State<ShipmentHistoryScreen>
             style: TextStyle(
                 color: isDark ? Colors.white : AppColors.textDark,
                 fontWeight: FontWeight.w700)),
-        actions: const [ThemeToggleButton(mini: true)],
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh_rounded,
+                color: isDark ? Colors.white : AppColors.textDark, size: 20),
+            onPressed: _loadHistory,
+          ),
+          const ThemeToggleButton(mini: true),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(96),
           child: Column(children: [
-            // Search bar
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
               child: Container(
@@ -119,9 +163,7 @@ class _ShipmentHistoryScreenState extends State<ShipmentHistoryScreen>
                   color: isDark ? AppColors.darkBg3 : const Color(0xFFF4FAFF),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                      color: isDark
-                          ? AppColors.darkBorder
-                          : AppColors.skyBorder),
+                      color: isDark ? AppColors.darkBorder : AppColors.skyBorder),
                 ),
                 child: TextField(
                   onChanged: (v) => setState(() => _search = v),
@@ -131,14 +173,10 @@ class _ShipmentHistoryScreenState extends State<ShipmentHistoryScreen>
                   decoration: InputDecoration(
                     hintText: 'Search by ID, city or route...',
                     hintStyle: TextStyle(
-                        color: isDark
-                            ? AppColors.darkSubtext
-                            : AppColors.textDarkHint,
+                        color: isDark ? AppColors.darkSubtext : AppColors.textDarkHint,
                         fontSize: 13),
                     prefixIcon: Icon(Icons.search_rounded,
-                        color: isDark
-                            ? AppColors.darkSubtext
-                            : AppColors.textDarkSecondary,
+                        color: isDark ? AppColors.darkSubtext : AppColors.textDarkSecondary,
                         size: 20),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 12),
@@ -146,15 +184,11 @@ class _ShipmentHistoryScreenState extends State<ShipmentHistoryScreen>
                 ),
               ),
             ),
-            // Tabs
             TabBar(
               controller: _tabs,
               labelColor: AppColors.primary,
-              unselectedLabelColor: isDark
-                  ? AppColors.darkSubtext
-                  : AppColors.textDarkSecondary,
-              labelStyle: const TextStyle(
-                  fontWeight: FontWeight.w700, fontSize: 12),
+              unselectedLabelColor: isDark ? AppColors.darkSubtext : AppColors.textDarkSecondary,
+              labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
               indicatorColor: AppColors.primary,
               tabs: const [
                 Tab(text: 'All'),
@@ -166,15 +200,42 @@ class _ShipmentHistoryScreenState extends State<ShipmentHistoryScreen>
           ]),
         ),
       ),
-      body: TabBarView(
-        controller: _tabs,
-        children: [
-          _HistoryList(items: _filtered(null), isDark: isDark),
-          _HistoryList(items: _filtered('Road'), isDark: isDark),
-          _HistoryList(items: _filtered('Air'), isDark: isDark),
-          _HistoryList(items: _filtered('Ocean'), isDark: isDark),
-        ],
-      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.error_outline_rounded,
+                        size: 48,
+                        color: isDark ? AppColors.darkSubtext : AppColors.textDarkHint),
+                    const SizedBox(height: 12),
+                    Text('Failed to load history',
+                        style: TextStyle(
+                            color: isDark ? Colors.white70 : AppColors.textDark,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
+                    Text(_error!,
+                        style: TextStyle(
+                            color: isDark ? AppColors.darkSubtext : AppColors.textDarkSecondary,
+                            fontSize: 12),
+                        textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: _loadHistory,
+                      icon: const Icon(Icons.refresh_rounded, size: 16),
+                      label: const Text('Retry'),
+                    ),
+                  ]),
+                )
+              : TabBarView(
+                  controller: _tabs,
+                  children: [
+                    _HistoryList(items: _filtered(null), isDark: isDark),
+                    _HistoryList(items: _filtered('Road'), isDark: isDark),
+                    _HistoryList(items: _filtered('Air'), isDark: isDark),
+                    _HistoryList(items: _filtered('Ocean'), isDark: isDark),
+                  ],
+                ),
     );
   }
 }
@@ -195,9 +256,7 @@ class _HistoryList extends StatelessWidget {
           const SizedBox(height: 12),
           Text('No shipments found',
               style: TextStyle(
-                  color: isDark
-                      ? AppColors.darkSubtext
-                      : AppColors.textDarkSecondary)),
+                  color: isDark ? AppColors.darkSubtext : AppColors.textDarkSecondary)),
         ]),
       );
     }
@@ -263,23 +322,17 @@ class _HistoryCard extends StatelessWidget {
             Row(children: [
               Text(item.from,
                   style: TextStyle(
-                      color: isDark
-                          ? AppColors.darkSubtext
-                          : AppColors.textDarkSecondary,
+                      color: isDark ? AppColors.darkSubtext : AppColors.textDarkSecondary,
                       fontSize: 12)),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Icon(Icons.arrow_forward_rounded,
                     size: 12,
-                    color: isDark
-                        ? AppColors.darkSubtext
-                        : AppColors.textDarkSecondary),
+                    color: isDark ? AppColors.darkSubtext : AppColors.textDarkSecondary),
               ),
               Text(item.to,
                   style: TextStyle(
-                      color: isDark
-                          ? AppColors.darkSubtext
-                          : AppColors.textDarkSecondary,
+                      color: isDark ? AppColors.darkSubtext : AppColors.textDarkSecondary,
                       fontSize: 12)),
             ]),
             const SizedBox(height: 4),
@@ -292,9 +345,7 @@ class _HistoryCard extends StatelessWidget {
               const Spacer(),
               Text(item.date,
                   style: TextStyle(
-                      color: isDark
-                          ? AppColors.darkSubtext
-                          : AppColors.textDarkSecondary,
+                      color: isDark ? AppColors.darkSubtext : AppColors.textDarkSecondary,
                       fontSize: 11)),
               const SizedBox(width: 8),
               Text('₹${item.amount.toStringAsFixed(0)}',

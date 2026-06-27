@@ -115,22 +115,17 @@ class _LogisticsOrderScreenState extends State<LogisticsOrderScreen>
           : LogisticsMockData.aiRecommendations(
               goods: g, weightKg: weightKg,
               shipmentType: _transportMode, isUrgent: isUrgent);
-    } catch (_) {
-      final weightTons = LogisticsMockData.toTons(weightKg);
-      _vehicle = LogisticsMockData.recommendVehicle(
-        weightTons: weightTons, shipmentType: _transportMode,
-        classType: g.classType, isUrgent: isUrgent,
-      );
-      _pricing = LogisticsMockData.calculateFreight(
-        goods: g, weightKg: weightKg,
-        distanceKm: LogisticsMockData.estimateDistance('Mumbai', 'Rotterdam'),
-        vehicle: _vehicle!, isExport: _shipmentType == 'Export',
-        needsWarehouse: _needsWarehouse, goodsValue: goodsValue,
-      );
-      _recommendations = LogisticsMockData.aiRecommendations(
-        goods: g, weightKg: weightKg,
-        shipmentType: _transportMode, isUrgent: isUrgent,
-      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e is ApiException ? e.message : 'Failed to get freight estimate. Please try again.'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ));
+        setState(() { _calculating = false; _step = 2; });
+      }
+      return;
     }
 
     if (mounted) setState(() => _calculating = false);

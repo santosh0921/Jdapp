@@ -19,22 +19,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
 
   static const _categories = ['All', 'Auth', 'Shipment', 'User', 'Payment', 'System'];
 
-  static const _logs = [
-    _Log(id: 'AL-00921', actor: 'admin@jd.in', action: 'Logged in via 2FA', category: 'Auth', time: '10:32 AM', date: 'Today', severity: 'info', ip: '192.168.1.42', detail: 'Chrome · Windows 11'),
-    _Log(id: 'AL-00920', actor: 'admin@jd.in', action: 'Exported analytics report', category: 'System', time: '10:14 AM', date: 'Today', severity: 'info', ip: '192.168.1.42', detail: 'June 2025 report'),
-    _Log(id: 'AL-00919', actor: 'admin@jd.in', action: 'Updated user role: driver → admin', category: 'User', time: '09:58 AM', date: 'Today', severity: 'warning', ip: '192.168.1.42', detail: 'User ID: USR-0042'),
-    _Log(id: 'AL-00918', actor: 'admin@jd.in', action: 'Cancelled shipment JD-IND-4182', category: 'Shipment', time: '09:31 AM', date: 'Today', severity: 'warning', ip: '192.168.1.42', detail: 'Reason: customer request'),
-    _Log(id: 'AL-00917', actor: 'system', action: 'Scheduled backup completed', category: 'System', time: '04:00 AM', date: 'Today', severity: 'info', ip: 'system', detail: 'DB snapshot 2025-06-18'),
-    _Log(id: 'AL-00916', actor: 'Unknown', action: 'Failed login attempt', category: 'Auth', time: '11:47 PM', date: 'Yesterday', severity: 'critical', ip: '61.91.47.13', detail: 'Blocked after 3 attempts'),
-    _Log(id: 'AL-00915', actor: 'admin@jd.in', action: 'Issued refund ₹1,450', category: 'Payment', time: '06:20 PM', date: 'Yesterday', severity: 'info', ip: '192.168.1.42', detail: 'Order: JD-2025-9183'),
-    _Log(id: 'AL-00914', actor: 'admin@jd.in', action: 'Added new warehouse: Pune Hub', category: 'System', time: '03:15 PM', date: 'Yesterday', severity: 'info', ip: '192.168.1.42', detail: 'WH-0014'),
-    _Log(id: 'AL-00913', actor: 'admin@jd.in', action: 'Suspended driver account', category: 'User', time: '01:40 PM', date: 'Yesterday', severity: 'critical', ip: '192.168.1.42', detail: 'Driver ID: DRV-0082'),
-    _Log(id: 'AL-00912', actor: 'admin@jd.in', action: 'Updated payment gateway config', category: 'Payment', time: '11:05 AM', date: 'Yesterday', severity: 'warning', ip: '192.168.1.42', detail: 'Razorpay key rotated'),
-    _Log(id: 'AL-00911', actor: 'admin@jd.in', action: 'Logged in via 2FA', category: 'Auth', time: '09:00 AM', date: 'Yesterday', severity: 'info', ip: '192.168.1.42', detail: 'Chrome · Windows 11'),
-    _Log(id: 'AL-00910', actor: 'system', action: 'OBC reward disbursement batch', category: 'Payment', time: '12:00 AM', date: '17 Jun', severity: 'info', ip: 'system', detail: '1,240 users credited'),
-  ];
-
-  List<_Log>? _liveLogs;
+  List<_Log> _liveLogs = [];
 
   @override
   void initState() {
@@ -44,7 +29,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
 
   Future<void> _loadAuditLogs() async {
     final data = await AdminService.instance.getAuditLogs();
-    if (!mounted || data.isEmpty) return;
+    if (!mounted) return;
     setState(() {
       _liveLogs = data.map((m) {
         final cat = m['category']?.toString() ?? m['action_type']?.toString() ?? 'System';
@@ -75,7 +60,7 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
   }
 
   List<_Log> get _filtered {
-    final source = _liveLogs ?? _logs;
+    final source = _liveLogs;
     var list = _selectedCategory == 'All'
         ? source
         : source.where((l) => l.category == _selectedCategory).toList();
@@ -221,13 +206,13 @@ class _AuditLogsScreenState extends State<AuditLogsScreen> {
   }
 
   Widget _buildStats(bool dark, _Palette p) {
-    final criticalCount = _logs.where((l) => l.severity == 'critical').length;
-    final warningCount = _logs.where((l) => l.severity == 'warning').length;
+    final criticalCount = _liveLogs.where((l) => l.severity == 'critical').length;
+    final warningCount = _liveLogs.where((l) => l.severity == 'warning').length;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Row(
         children: [
-          _StatChip(label: '${_logs.length} total', color: AppColors.primary, p: p),
+          _StatChip(label: '${_liveLogs.length} total', color: AppColors.primary, p: p),
           const SizedBox(width: 8),
           _StatChip(label: '$criticalCount critical', color: AppColors.error, p: p),
           const SizedBox(width: 8),

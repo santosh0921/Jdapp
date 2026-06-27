@@ -3,8 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
+import 'package:jd_style_logistics/providers/driver_provider.dart';
 
 class ActiveDeliveryScreen extends StatefulWidget {
   const ActiveDeliveryScreen({super.key});
@@ -57,6 +59,10 @@ class _ActiveDeliveryScreenState extends State<ActiveDeliveryScreen>
 
   @override
   Widget build(BuildContext context) {
+    final order = context.watch<DriverProvider>().activeDelivery;
+    final orderId = order != null
+        ? (order.trackingId.isNotEmpty ? order.trackingId : order.id)
+        : '—';
     return Scaffold(
       backgroundColor: _bg(context),
       body: SafeArea(
@@ -71,6 +77,7 @@ class _ActiveDeliveryScreenState extends State<ActiveDeliveryScreen>
               child: Column(
                 children: [
                   _Header(
+                    orderId: orderId,
                     textColor: _text(context),
                     subTextColor: _sub(context),
                     surfaceColor: _surface(context),
@@ -193,12 +200,14 @@ class _ActiveDeliveryScreenState extends State<ActiveDeliveryScreen>
 }
 
 class _Header extends StatelessWidget {
+  final String orderId;
   final Color textColor;
   final Color subTextColor;
   final Color surfaceColor;
   final VoidCallback onBack;
 
   const _Header({
+    required this.orderId,
     required this.textColor,
     required this.subTextColor,
     required this.surfaceColor,
@@ -226,7 +235,7 @@ class _Header extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Order #JD-2024-003',
+                    orderId,
                     style: TextStyle(
                       color: subTextColor,
                       fontSize: 12,
@@ -540,12 +549,16 @@ class _MetricGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = (MediaQuery.of(context).size.width - 40) / 2;
+    final order = context.watch<DriverProvider>().activeDelivery;
+    final amtLabel = order != null && order.amount > 0
+        ? '₹${order.amount.toStringAsFixed(0)}'
+        : '—';
 
     final items = [
-      _MetricData('ETA', '18 min', Icons.timer_rounded, const Color(0xFF0B5FFF)),
-      _MetricData('Distance', '12.4 km', Icons.route_rounded, AppColors.success),
-      _MetricData('COD', '₹2,499', Icons.currency_rupee_rounded, AppColors.warning),
-      _MetricData('Reward', '+12 OBC', Icons.monetization_on_rounded, const Color(0xFFFF8A00)),
+      _MetricData('ETA', '—', Icons.timer_rounded, const Color(0xFF0B5FFF)),
+      _MetricData('Distance', '—', Icons.route_rounded, AppColors.success),
+      _MetricData('COD', amtLabel, Icons.currency_rupee_rounded, AppColors.warning),
+      _MetricData('Reward', '+OBC', Icons.monetization_on_rounded, const Color(0xFFFF8A00)),
     ];
 
     return Wrap(
@@ -612,6 +625,9 @@ class _RouteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final order = context.watch<DriverProvider>().activeDelivery;
+    final pickup = order?.pickupAddress.isNotEmpty == true ? order!.pickupAddress : '—';
+    final delivery = order?.deliveryAddress.isNotEmpty == true ? order!.deliveryAddress : '—';
     return _ClayCard(
       surfaceColor: surfaceColor,
       padding: const EdgeInsets.all(16),
@@ -619,7 +635,7 @@ class _RouteCard extends StatelessWidget {
         children: [
           _CardTitle(
             title: 'Route Details',
-            trailing: '72% Complete',
+            trailing: 'In Progress',
             textColor: textColor,
             subTextColor: subTextColor,
           ),
@@ -627,7 +643,7 @@ class _RouteCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
-              value: .72,
+              value: .5,
               minHeight: 9,
               backgroundColor: const Color(0xFF0B5FFF).withValues(alpha: .10),
               valueColor: const AlwaysStoppedAnimation(Color(0xFFFF8A00)),
@@ -638,7 +654,7 @@ class _RouteCard extends StatelessWidget {
             icon: Icons.check_circle_rounded,
             iconColor: AppColors.success,
             label: 'PICKUP COMPLETED',
-            address: '14, Andheri East, Mumbai — 400069',
+            address: pickup,
             textColor: textColor,
             subTextColor: subTextColor,
             done: true,
@@ -648,7 +664,7 @@ class _RouteCard extends StatelessWidget {
             icon: Icons.local_shipping_rounded,
             iconColor: const Color(0xFF0B5FFF),
             label: 'IN TRANSIT',
-            address: 'Western Express Highway • Light traffic',
+            address: 'En route to delivery',
             textColor: textColor,
             subTextColor: subTextColor,
             done: true,
@@ -658,7 +674,7 @@ class _RouteCard extends StatelessWidget {
             icon: Icons.location_on_rounded,
             iconColor: AppColors.warning,
             label: 'DELIVERY',
-            address: '8, Koramangala 5th Block, Bengaluru — 560095',
+            address: delivery,
             textColor: textColor,
             subTextColor: subTextColor,
             done: false,
@@ -682,6 +698,14 @@ class _PackageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final order = context.watch<DriverProvider>().activeDelivery;
+    final pkgType = order?.packageType.isNotEmpty == true ? order!.packageType : 'Parcel';
+    final weight = order != null && order.weight > 0
+        ? '${order.weight.toStringAsFixed(1)} kg'
+        : '—';
+    final amtLabel = order != null && order.amount > 0
+        ? 'Collect ₹${order.amount.toStringAsFixed(0)} from customer'
+        : 'Confirm payment with customer';
     return _ClayCard(
       surfaceColor: surfaceColor,
       padding: const EdgeInsets.all(16),
@@ -689,16 +713,16 @@ class _PackageCard extends StatelessWidget {
         children: [
           _CardTitle(
             title: 'Package',
-            trailing: 'Fragile',
+            trailing: pkgType,
             textColor: textColor,
             subTextColor: subTextColor,
           ),
           const SizedBox(height: 14),
           Row(
             children: [
-              _SoftIcon(
+              const _SoftIcon(
                 icon: Icons.inventory_2_rounded,
-                color: const Color(0xFF0B5FFF),
+                color: Color(0xFF0B5FFF),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -709,7 +733,7 @@ class _PackageCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Electronics — Medium Box',
+                        pkgType,
                         style: TextStyle(
                           color: textColor,
                           fontSize: 15,
@@ -717,7 +741,7 @@ class _PackageCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '2.5 kg • Handle with care • Insured',
+                        weight,
                         style: TextStyle(
                           color: subTextColor,
                           fontSize: 12,
@@ -739,18 +763,14 @@ class _PackageCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: AppColors.warning.withValues(alpha: .20)),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(
-                  Icons.warning_amber_rounded,
-                  color: AppColors.warning,
-                  size: 18,
-                ),
-                SizedBox(width: 8),
+                const Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 18),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Cash on delivery — Collect ₹2,499 from customer',
-                    style: TextStyle(
+                    amtLabel,
+                    style: const TextStyle(
                       color: AppColors.warning,
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
@@ -796,13 +816,8 @@ class _CustomerCard extends StatelessWidget {
               CircleAvatar(
                 radius: 24,
                 backgroundColor: const Color(0xFF0B5FFF).withValues(alpha: .12),
-                child: const Text(
-                  'RK',
-                  style: TextStyle(
-                    color: Color(0xFF0B5FFF),
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                child: const Icon(Icons.person_rounded,
+                    color: Color(0xFF0B5FFF), size: 26),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -813,7 +828,7 @@ class _CustomerCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Rajesh Kumar',
+                        'Customer',
                         style: TextStyle(
                           color: textColor,
                           fontSize: 15,
@@ -821,7 +836,7 @@ class _CustomerCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '+91 98765 43210',
+                        'Contact via app',
                         style: TextStyle(
                           color: subTextColor,
                           fontSize: 12,

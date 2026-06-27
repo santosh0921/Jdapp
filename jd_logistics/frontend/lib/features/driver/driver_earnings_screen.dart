@@ -9,6 +9,67 @@ import 'package:jd_style_logistics/core/constants/app_colors.dart';
 import 'package:jd_style_logistics/models/driver_model.dart';
 import 'package:jd_style_logistics/providers/driver_provider.dart';
 
+// Computes earnings stats from the live list.
+class _EarnStats {
+  final double total;
+  final double today;
+  final double week;
+  final int deliveries;
+  final double avgPerTrip;
+  final List<double> chart; // 7 normalised values Mon→Sun
+
+  const _EarnStats({
+    required this.total,
+    required this.today,
+    required this.week,
+    required this.deliveries,
+    required this.avgPerTrip,
+    required this.chart,
+  });
+
+  static _EarnStats from(List<EarningModel> list) {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final weekStart = todayStart.subtract(const Duration(days: 6));
+
+    double total = 0, todayAmt = 0, weekAmt = 0;
+    int deliveries = 0;
+
+    // Buckets for Mon=0 … Sun=6 (relative to weekStart)
+    final buckets = List<double>.filled(7, 0);
+
+    for (final e in list) {
+      if (e.amount <= 0) continue;
+      total += e.amount;
+      if (!e.createdAt.isBefore(todayStart)) todayAmt += e.amount;
+      if (!e.createdAt.isBefore(weekStart)) {
+        weekAmt += e.amount;
+        final dayOffset = e.createdAt.difference(weekStart).inDays.clamp(0, 6);
+        buckets[dayOffset] += e.amount;
+      }
+      if (e.type == 'delivery') deliveries++;
+    }
+
+    final maxBucket = buckets.reduce(math.max);
+    final chart = maxBucket > 0
+        ? buckets.map((v) => (v / maxBucket).clamp(0.05, 1.0)).toList()
+        : List<double>.filled(7, 0.0);
+
+    return _EarnStats(
+      total: total,
+      today: todayAmt,
+      week: weekAmt,
+      deliveries: deliveries,
+      avgPerTrip: deliveries > 0 ? total / deliveries : 0,
+      chart: chart,
+    );
+  }
+
+  String fmt(double v) => v >= 1000
+      ? '₹${(v / 1000).toStringAsFixed(1)}k'
+      : '₹${v.toStringAsFixed(0)}';
+}
+
 class DriverEarningsScreen extends StatefulWidget {
   const DriverEarningsScreen({super.key});
 
@@ -169,9 +230,7 @@ class _DriverEarningsScreenState extends State<DriverEarningsScreen>
                             textColor: _text(context),
                             subTextColor: _sub(context),
                             surfaceColor: _surface(context),
-                            live: context.watch<DriverProvider>().earnings.isNotEmpty
-                                ? context.watch<DriverProvider>().earnings.map(_fromEarning).toList()
-                                : null,
+                            live: context.watch<DriverProvider>().earnings.map(_fromEarning).toList(),
                           ),
                         ],
                       ),
@@ -268,6 +327,7 @@ class _HeroEarningsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final stats = _EarnStats.from(context.watch<DriverProvider>().earnings);
     return _ClayCard(
       surfaceColor: surfaceColor,
       padding: const EdgeInsets.all(16),
@@ -283,7 +343,7 @@ class _HeroEarningsCard extends StatelessWidget {
                   const _TrendPill(),
                   const SizedBox(height: 12),
                   Text(
-                    '₹18,450',
+                    stats.fmt(stats.total),
                     style: TextStyle(
                       color: textColor,
                       fontSize: 34,
@@ -403,12 +463,13 @@ class _MetricGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = (MediaQuery.of(context).size.width - 40) / 2;
+    final stats = _EarnStats.from(context.watch<DriverProvider>().earnings);
 
     final items = [
-      _MetricData('Today', '₹1,240', Icons.today_rounded, const Color(0xFF0B5FFF)),
-      _MetricData('This Week', '₹5,890', Icons.date_range_rounded, const Color(0xFFFF8A00)),
-      _MetricData('Deliveries', '147', Icons.local_shipping_rounded, AppColors.success),
-      _MetricData('Avg / Trip', '₹125', Icons.route_rounded, AppColors.warning),
+      _MetricData('Today', stats.fmt(stats.today), Icons.today_rounded, const Color(0xFF0B5FFF)),
+      _MetricData('This Week', stats.fmt(stats.week), Icons.date_range_rounded, const Color(0xFFFF8A00)),
+      _MetricData('Deliveries', '${stats.deliveries}', Icons.local_shipping_rounded, AppColors.success),
+      _MetricData('Avg / Trip', stats.fmt(stats.avgPerTrip), Icons.route_rounded, AppColors.warning),
     ];
 
     return Wrap(
@@ -475,6 +536,11 @@ class _GoalProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final stats = _EarnStats.from(context.watch<DriverProvider>().earnings);
+    const double target = 25000;
+    final progress = (stats.total / target).clamp(0.0, 1.0);
+    final left = (target - stats.total).clamp(0.0, target);
+    final pct = (progress * 100).toStringAsFixed(0);
     return _ClayCard(
       surfaceColor: surfaceColor,
       padding: const EdgeInsets.all(16),
@@ -482,7 +548,7 @@ class _GoalProgressCard extends StatelessWidget {
         children: [
           _CardTitle(
             title: 'Monthly Goal',
-            trailing: '73% Complete',
+            trailing: '$pct% Complete',
             textColor: textColor,
             subTextColor: subTextColor,
           ),
@@ -490,7 +556,7 @@ class _GoalProgressCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
-              value: .73,
+              value: progress,
               minHeight: 10,
               backgroundColor: const Color(0xFF0B5FFF).withValues(alpha: .10),
               valueColor: const AlwaysStoppedAnimation(Color(0xFFFF8A00)),
@@ -499,11 +565,11 @@ class _GoalProgressCard extends StatelessWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              _GoalMini(label: 'Target', value: '₹25,000', color: const Color(0xFF0B5FFF)),
+              _GoalMini(label: 'Target', value: stats.fmt(target), color: const Color(0xFF0B5FFF)),
               const SizedBox(width: 10),
-              _GoalMini(label: 'Current', value: '₹18,450', color: AppColors.success),
+              _GoalMini(label: 'Current', value: stats.fmt(stats.total), color: AppColors.success),
               const SizedBox(width: 10),
-              _GoalMini(label: 'Left', value: '₹6,550', color: AppColors.warning),
+              _GoalMini(label: 'Left', value: stats.fmt(left), color: AppColors.warning),
             ],
           ),
         ],
@@ -571,10 +637,12 @@ class _EarningsGraphCard extends StatelessWidget {
     required this.surfaceColor,
   });
 
-  static const List<double> _values = [.42, .64, .50, .78, .92, .70, .58];
-
   @override
   Widget build(BuildContext context) {
+    final stats = _EarnStats.from(context.watch<DriverProvider>().earnings);
+    final chartValues = stats.chart.every((v) => v == 0.0)
+        ? [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
+        : stats.chart;
     return _ClayCard(
       surfaceColor: surfaceColor,
       padding: const EdgeInsets.all(16),
@@ -582,7 +650,7 @@ class _EarningsGraphCard extends StatelessWidget {
         children: [
           _CardTitle(
             title: 'Weekly Breakdown',
-            trailing: '₹5,890',
+            trailing: stats.fmt(stats.week),
             textColor: textColor,
             subTextColor: subTextColor,
           ),
@@ -591,7 +659,7 @@ class _EarningsGraphCard extends StatelessWidget {
             height: 150,
             width: double.infinity,
             child: CustomPaint(
-              painter: _EarningsGraphPainter(values: _values),
+              painter: _EarningsGraphPainter(values: chartValues),
               child: const SizedBox.expand(),
             ),
           ),
@@ -911,6 +979,7 @@ class _WithdrawCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final stats = _EarnStats.from(context.watch<DriverProvider>().earnings);
     return _ClayCard(
       surfaceColor: surfaceColor,
       padding: const EdgeInsets.all(16),
@@ -929,7 +998,7 @@ class _WithdrawCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '₹12,450 Available',
+                    '${stats.fmt(stats.total)} Available',
                     style: TextStyle(
                       color: textColor,
                       fontSize: 17,
@@ -937,7 +1006,7 @@ class _WithdrawCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'Withdraw to bank account ending 4521',
+                    'Withdraw to linked bank account',
                     style: TextStyle(
                       color: subTextColor,
                       fontSize: 12,
@@ -973,43 +1042,9 @@ class _TransactionsCard extends StatelessWidget {
     this.live,
   });
 
-  static const List<_TransactionData> transactions = [
-    _TransactionData(
-      title: 'Delivery Reward',
-      subtitle: 'Andheri → Koramangala',
-      amount: '+₹185',
-      time: '2:30 PM',
-      credit: true,
-      icon: Icons.local_shipping_rounded,
-    ),
-    _TransactionData(
-      title: 'OBC Reward',
-      subtitle: 'Safe delivery bonus',
-      amount: '+15 OBC',
-      time: '2:31 PM',
-      credit: true,
-      icon: Icons.monetization_on_rounded,
-    ),
-    _TransactionData(
-      title: 'Delivery Reward',
-      subtitle: 'Powai → Thane',
-      amount: '+₹120',
-      time: '11:15 AM',
-      credit: true,
-      icon: Icons.inventory_2_rounded,
-    ),
-    _TransactionData(
-      title: 'Withdrawal',
-      subtitle: 'Bank transfer ending 4521',
-      amount: '-₹5,000',
-      time: 'Yesterday',
-      credit: false,
-      icon: Icons.account_balance_rounded,
-    ),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final items = live ?? const <_TransactionData>[];
     return _ClayCard(
       surfaceColor: surfaceColor,
       padding: const EdgeInsets.all(16),
@@ -1022,7 +1057,13 @@ class _TransactionsCard extends StatelessWidget {
             subTextColor: subTextColor,
           ),
           const SizedBox(height: 14),
-          ...(live ?? transactions).map(
+          if (items.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text('No transactions yet',
+                  style: TextStyle(color: subTextColor, fontSize: 13)),
+            ),
+          ...items.map(
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _TransactionRow(

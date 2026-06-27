@@ -3,8 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
+import 'package:jd_style_logistics/providers/driver_provider.dart';
 
 class NavigationScreen extends StatefulWidget {
   const NavigationScreen({super.key});
@@ -18,26 +20,6 @@ class _NavigationScreenState extends State<NavigationScreen>
   late final AnimationController _routeController;
   late final AnimationController _pulseController;
 
-  static const List<_Stop> _stops = [
-    _Stop(
-      label: 'Warehouse A',
-      address: '12 Industrial Area, Andheri East',
-      isOrigin: true,
-      completed: true,
-    ),
-    _Stop(
-      label: 'In Transit',
-      address: 'Western Express Highway',
-      isOrigin: false,
-      completed: true,
-    ),
-    _Stop(
-      label: 'Rajesh Kumar',
-      address: 'Koramangala 5th Block, Bengaluru',
-      isOrigin: false,
-      completed: false,
-    ),
-  ];
 
   @override
   void initState() {
@@ -78,6 +60,26 @@ class _NavigationScreenState extends State<NavigationScreen>
 
   @override
   Widget build(BuildContext context) {
+    final order = context.watch<DriverProvider>().activeDelivery;
+    final orderId = order != null
+        ? (order.trackingId.isNotEmpty ? order.trackingId : order.id)
+        : 'Active Delivery';
+    final stops = order == null
+        ? const <_Stop>[]
+        : [
+            _Stop(
+              label: 'Pickup',
+              address: order.pickupAddress.isNotEmpty ? order.pickupAddress : '—',
+              isOrigin: true,
+              completed: true,
+            ),
+            _Stop(
+              label: 'Delivery',
+              address: order.deliveryAddress.isNotEmpty ? order.deliveryAddress : '—',
+              isOrigin: false,
+              completed: false,
+            ),
+          ];
     return Scaffold(
       backgroundColor: _bg(context),
       body: SafeArea(
@@ -88,7 +90,7 @@ class _NavigationScreenState extends State<NavigationScreen>
               children: [
                 _Header(
                   title: 'Live Navigation',
-                  subtitle: 'Order #JD-2024-003',
+                  subtitle: orderId,
                   textColor: _text(context),
                   subTextColor: _sub(context),
                   surfaceColor: _surface(context),
@@ -120,13 +122,14 @@ class _NavigationScreenState extends State<NavigationScreen>
                         ),
                         const SizedBox(height: 14),
                         _DeliveryProgressCard(
-                          stops: _stops,
+                          stops: stops,
                           textColor: _text(context),
                           subTextColor: _sub(context),
                           surfaceColor: _surface(context),
                         ),
                         const SizedBox(height: 14),
                         _CustomerCard(
+                          amount: order?.amount ?? 0,
                           textColor: _text(context),
                           subTextColor: _sub(context),
                           surfaceColor: _surface(context),
@@ -848,11 +851,13 @@ class _StopRow extends StatelessWidget {
 }
 
 class _CustomerCard extends StatelessWidget {
+  final double amount;
   final Color textColor;
   final Color subTextColor;
   final Color surfaceColor;
 
   const _CustomerCard({
+    required this.amount,
     required this.textColor,
     required this.subTextColor,
     required this.surfaceColor,
@@ -860,6 +865,7 @@ class _CustomerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final amtLabel = amount > 0 ? '₹${amount.toStringAsFixed(0)}' : '—';
     return _ClayCard(
       surfaceColor: surfaceColor,
       padding: const EdgeInsets.all(16),
@@ -867,7 +873,7 @@ class _CustomerCard extends StatelessWidget {
         children: [
           _CardTitle(
             title: 'Customer',
-            trailing: 'COD ₹2,499',
+            trailing: amtLabel,
             textColor: textColor,
             subTextColor: subTextColor,
           ),
@@ -877,13 +883,8 @@ class _CustomerCard extends StatelessWidget {
               CircleAvatar(
                 radius: 24,
                 backgroundColor: const Color(0xFF0B5FFF).withValues(alpha: .12),
-                child: const Text(
-                  'RK',
-                  style: TextStyle(
-                    color: Color(0xFF0B5FFF),
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
+                child: const Icon(Icons.person_rounded,
+                    color: Color(0xFF0B5FFF), size: 26),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -894,7 +895,7 @@ class _CustomerCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Rajesh Kumar',
+                        'Customer',
                         style: TextStyle(
                           color: textColor,
                           fontSize: 15,
@@ -902,7 +903,7 @@ class _CustomerCard extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '+91 98765 43210',
+                        'Contact via app',
                         style: TextStyle(
                           color: subTextColor,
                           fontSize: 12,
@@ -926,24 +927,6 @@ class _CustomerCard extends StatelessWidget {
                 onTap: () => HapticFeedback.lightImpact(),
               ),
             ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAF6FF),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: const Text(
-              'Instruction: Ring bell twice. Building 3, 2nd floor. Handle fragile package carefully.',
-              style: TextStyle(
-                color: Color(0xFF64748B),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                height: 1.35,
-              ),
-            ),
           ),
         ],
       ),

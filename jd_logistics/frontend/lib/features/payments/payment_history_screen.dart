@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
 import 'package:jd_style_logistics/core/widgets/glass_card.dart';
 import 'package:jd_style_logistics/core/widgets/gradient_background.dart';
+import 'package:jd_style_logistics/models/payment_model.dart';
+import 'package:jd_style_logistics/services/payment_service.dart';
 
 class PaymentHistoryScreen extends StatefulWidget {
   const PaymentHistoryScreen({super.key});
@@ -10,46 +12,19 @@ class PaymentHistoryScreen extends StatefulWidget {
   State<PaymentHistoryScreen> createState() => _PaymentHistoryScreenState();
 }
 
-class _TxData {
-  final String id;
-  final String title;
-  final String subtitle;
-  final String date;
-  final double amount;
-  final bool isCredit;
-  final String method;
-  final IconData icon;
-
-  const _TxData({
-    required this.id,
-    required this.title,
-    required this.subtitle,
-    required this.date,
-    required this.amount,
-    required this.isCredit,
-    required this.method,
-    required this.icon,
-  });
-}
-
 class _PaymentHistoryScreenState extends State<PaymentHistoryScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabs;
 
-  static const _transactions = [
-    _TxData(id: 'TXN-5501', title: 'Shipment JD-24101', subtitle: 'Mumbai → Delhi · Road', date: 'Jun 17, 2:30 PM', amount: 850, isCredit: false, method: 'UPI', icon: Icons.local_shipping_rounded),
-    _TxData(id: 'TXN-5502', title: 'Refund: JD-24089', subtitle: 'Cancelled shipment refund', date: 'Jun 16, 11:15 AM', amount: 320, isCredit: true, method: 'UPI', icon: Icons.replay_rounded),
-    _TxData(id: 'TXN-5503', title: 'Shipment JD-24102', subtitle: 'Bengaluru → Dubai · Air', date: 'Jun 15, 4:00 PM', amount: 4250, isCredit: false, method: 'Card', icon: Icons.flight_rounded),
-    _TxData(id: 'TXN-5504', title: 'Wallet Top-up', subtitle: 'Added to JD Wallet', date: 'Jun 14, 9:45 AM', amount: 2000, isCredit: true, method: 'Net Banking', icon: Icons.account_balance_wallet_rounded),
-    _TxData(id: 'TXN-5505', title: 'Shipment JD-24096', subtitle: 'Chennai → Singapore · Ocean', date: 'Jun 12, 1:20 PM', amount: 12800, isCredit: false, method: 'Card', icon: Icons.directions_boat_rounded),
-    _TxData(id: 'TXN-5506', title: 'Promo Credit', subtitle: 'First International Saver applied', date: 'Jun 12, 1:20 PM', amount: 1920, isCredit: true, method: 'Promo', icon: Icons.card_giftcard_rounded),
-    _TxData(id: 'TXN-5507', title: 'Shipment JD-24088', subtitle: 'Delhi → Kolkata · Road', date: 'Jun 10, 8:00 AM', amount: 540, isCredit: false, method: 'COD', icon: Icons.local_shipping_rounded),
-  ];
+  List<PaymentTransactionModel> _txList = [];
+  bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 3, vsync: this);
+    _loadHistory();
   }
 
   @override
@@ -58,19 +33,31 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen>
     super.dispose();
   }
 
-  List<_TxData> _filtered(String type) {
-    if (type == 'All') return _transactions;
-    if (type == 'Credit') return _transactions.where((t) => t.isCredit).toList();
-    return _transactions.where((t) => !t.isCredit).toList();
+  Future<void> _loadHistory() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final list = await PaymentService.instance.getHistory();
+      if (!mounted) return;
+      setState(() { _txList = list; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
   }
 
-  double get _totalSpent => _transactions
-      .where((t) => !t.isCredit)
-      .fold(0, (sum, t) => sum + t.amount);
+  bool _isCredit(PaymentTransactionModel t) =>
+      t.type == 'credit' || t.type == 'refund' || t.type == 'wallet_credit';
 
-  double get _totalReceived => _transactions
-      .where((t) => t.isCredit)
-      .fold(0, (sum, t) => sum + t.amount);
+  List<PaymentTransactionModel> _filtered(String type) {
+    if (type == 'All') return _txList;
+    if (type == 'Credit') return _txList.where(_isCredit).toList();
+    return _txList.where((t) => !_isCredit(t)).toList();
+  }
+
+  double get _totalSpent =>
+      _txList.where((t) => !_isCredit(t)).fold(0.0, (s, t) => s + t.amount);
+
+  double get _totalReceived =>
+      _txList.where(_isCredit).fold(0.0, (s, t) => s + t.amount);
 
   @override
   Widget build(BuildContext context) {
@@ -87,9 +74,8 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen>
                   color: Colors.white, fontWeight: FontWeight.w700)),
           actions: [
             IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.filter_list_rounded,
-                    color: Colors.white)),
+                onPressed: _loadHistory,
+                icon: const Icon(Icons.refresh_rounded, color: Colors.white)),
           ],
           bottom: TabBar(
             controller: _tabs,
@@ -103,59 +89,82 @@ class _PaymentHistoryScreenState extends State<PaymentHistoryScreen>
             ],
           ),
         ),
-        body: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: GlassCard(
-                padding: const EdgeInsets.symmetric(
-                    vertical: 14, horizontal: 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _SumStat(
-                        label: 'Total Spent',
-                        value: '₹${_totalSpent.toStringAsFixed(0)}',
-                        color: AppColors.error),
-                    Container(
-                        width: 1,
-                        height: 30,
-                        color: Colors.white.withValues(alpha: 0.2)),
-                    _SumStat(
-                        label: 'Total Received',
-                        value: '₹${_totalReceived.toStringAsFixed(0)}',
-                        color: AppColors.success),
-                    Container(
-                        width: 1,
-                        height: 30,
-                        color: Colors.white.withValues(alpha: 0.2)),
-                    _SumStat(
-                        label: 'Transactions',
-                        value: '${_transactions.length}',
-                        color: AppColors.primary),
-                  ],
-                ),
-              ),
-            ),
-            Expanded(
-              child: TabBarView(
-                controller: _tabs,
-                children: [
-                  _TxList(items: _filtered('All')),
-                  _TxList(items: _filtered('Credit')),
-                  _TxList(items: _filtered('Debit')),
-                ],
-              ),
-            ),
-          ],
-        ),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator(color: Colors.white))
+            : _error != null
+                ? Center(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.error_outline_rounded,
+                          size: 48, color: Colors.white38),
+                      const SizedBox(height: 12),
+                      const Text('Failed to load history',
+                          style: TextStyle(
+                              color: Colors.white70, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                      Text(_error!,
+                          style: const TextStyle(color: Colors.white38, fontSize: 12),
+                          textAlign: TextAlign.center),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: _loadHistory,
+                        icon: const Icon(Icons.refresh_rounded, size: 16),
+                        label: const Text('Retry'),
+                      ),
+                    ]),
+                  )
+                : Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: GlassCard(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 14, horizontal: 20),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              _SumStat(
+                                  label: 'Total Spent',
+                                  value: '₹${_totalSpent.toStringAsFixed(0)}',
+                                  color: AppColors.error),
+                              Container(
+                                  width: 1,
+                                  height: 30,
+                                  color: Colors.white.withValues(alpha: 0.2)),
+                              _SumStat(
+                                  label: 'Total Received',
+                                  value: '₹${_totalReceived.toStringAsFixed(0)}',
+                                  color: AppColors.success),
+                              Container(
+                                  width: 1,
+                                  height: 30,
+                                  color: Colors.white.withValues(alpha: 0.2)),
+                              _SumStat(
+                                  label: 'Transactions',
+                                  value: '${_txList.length}',
+                                  color: AppColors.primary),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: TabBarView(
+                          controller: _tabs,
+                          children: [
+                            _TxList(items: _filtered('All')),
+                            _TxList(items: _filtered('Credit')),
+                            _TxList(items: _filtered('Debit')),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
       ),
     );
   }
 }
 
 class _TxList extends StatelessWidget {
-  final List<_TxData> items;
+  final List<PaymentTransactionModel> items;
   const _TxList({required this.items});
 
   @override
@@ -176,13 +185,37 @@ class _TxList extends StatelessWidget {
 }
 
 class _TxCard extends StatelessWidget {
-  final _TxData t;
+  final PaymentTransactionModel t;
   const _TxCard({required this.t});
+
+  bool get _isCredit =>
+      t.type == 'credit' || t.type == 'refund' || t.type == 'wallet_credit';
+
+  IconData get _icon {
+    final tp = t.type.toLowerCase();
+    if (tp.contains('refund')) return Icons.replay_rounded;
+    if (tp.contains('wallet') || tp.contains('top')) return Icons.account_balance_wallet_rounded;
+    if (tp.contains('promo') || tp.contains('gift')) return Icons.card_giftcard_rounded;
+    if (t.method.toLowerCase() == 'card') return Icons.credit_card_rounded;
+    return Icons.local_shipping_rounded;
+  }
+
+  String _fmtDate(DateTime dt) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${months[dt.month - 1]} ${dt.day}, ${_twoDigit(dt.hour)}:${_twoDigit(dt.minute)}';
+  }
+
+  String _twoDigit(int n) => n.toString().padLeft(2, '0');
 
   @override
   Widget build(BuildContext context) {
-    final amountColor = t.isCredit ? AppColors.success : AppColors.error;
-    final sign = t.isCredit ? '+' : '−';
+    final amountColor = _isCredit ? AppColors.success : AppColors.error;
+    final sign = _isCredit ? '+' : '−';
+    final title = t.description?.isNotEmpty == true
+        ? t.description!
+        : t.shipmentId?.isNotEmpty == true
+            ? 'Shipment ${t.shipmentId}'
+            : t.type.replaceAll('_', ' ').toUpperCase();
 
     return GlassCard(
       padding: const EdgeInsets.all(14),
@@ -194,28 +227,29 @@ class _TxCard extends StatelessWidget {
               color: amountColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(t.icon, color: amountColor, size: 18),
+            child: Icon(_icon, color: amountColor, size: 18),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(t.title,
+                Text(title,
                     style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
-                        fontSize: 13)),
+                        fontSize: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 3),
-                Text(t.subtitle,
-                    style: const TextStyle(
-                        color: Colors.white54, fontSize: 11),
+                Text(t.reference ?? t.id,
+                    style: const TextStyle(color: Colors.white54, fontSize: 11),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 3),
                 Row(
                   children: [
-                    Text(t.date,
+                    Text(_fmtDate(t.createdAt),
                         style: const TextStyle(
                             color: Colors.white38, fontSize: 10)),
                     const SizedBox(width: 8),
@@ -265,8 +299,7 @@ class _SumStat extends StatelessWidget {
                   fontSize: 15)),
           const SizedBox(height: 2),
           Text(label,
-              style:
-                  const TextStyle(color: Colors.white54, fontSize: 10)),
+              style: const TextStyle(color: Colors.white54, fontSize: 10)),
         ],
       );
 }
