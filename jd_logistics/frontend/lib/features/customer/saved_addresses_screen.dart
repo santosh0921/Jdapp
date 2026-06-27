@@ -38,43 +38,9 @@ class _Address {
 }
 
 class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
-  final _addresses = [
-    const _Address(
-      id: 'a1',
-      label: 'Home',
-      name: 'Amit Sharma',
-      line1: '204, Suncity Apartments, Andheri West',
-      city: 'Mumbai, Maharashtra',
-      pin: '400058',
-      phone: '+91 98765 43210',
-      isDefault: true,
-      icon: Icons.home_rounded,
-    ),
-    const _Address(
-      id: 'a2',
-      label: 'Office',
-      name: 'Raj Electronics Ltd.',
-      line1: '12, Industrial Area, Phase II',
-      city: 'Mumbai, Maharashtra',
-      pin: '400053',
-      phone: '+91 22 4567 8900',
-      isDefault: false,
-      icon: Icons.business_rounded,
-    ),
-    const _Address(
-      id: 'a3',
-      label: 'Warehouse',
-      name: 'JD Mumbai Hub',
-      line1: 'Plot 5, Bhiwandi Logistics Park',
-      city: 'Bhiwandi, Maharashtra',
-      pin: '421302',
-      phone: '+91 91234 56789',
-      isDefault: false,
-      icon: Icons.warehouse_rounded,
-    ),
-  ];
+  final _addresses = <_Address>[];
 
-  String _defaultId = 'a1';
+  String _defaultId = '';
   bool _showAddForm = false;
 
   @override
@@ -119,13 +85,13 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
                         _VDiv(isDark: isDark),
                         _StatCol(
                             label: 'Default',
-                            value: '1',
+                            value: '${_addresses.any((a) => a.id == _defaultId) ? 1 : 0}',
                             color: AppColors.success,
                             isDark: isDark),
                         _VDiv(isDark: isDark),
                         _StatCol(
                             label: 'Cities',
-                            value: '2',
+                            value: '${_addresses.map((a) => a.city.split(',').first.trim()).toSet().length}',
                             color: AppColors.saffron,
                             isDark: isDark),
                       ],

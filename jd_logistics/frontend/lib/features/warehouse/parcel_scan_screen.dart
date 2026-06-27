@@ -324,6 +324,16 @@ class _ParcelScanScreenState extends State<ParcelScanScreen>
                     ),
                   ),
                   const SizedBox(height: 12),
+                  if (_recentScans.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Center(
+                        child: Text('No recent scans',
+                            style: TextStyle(
+                                color: isDark ? Colors.white38 : Colors.black38,
+                                fontSize: 13)),
+                      ),
+                    ),
                   ..._recentScans.map(
                     (s) => Padding(
                       padding: const EdgeInsets.only(bottom: 8),
@@ -371,11 +381,7 @@ class _ParcelScanScreenState extends State<ParcelScanScreen>
   }
 
 
-  static const _recentScans = [
-    {'id': 'IN-0040', 'type': 'Apparel', 'time': '1:10 PM', 'status': 'Stored'},
-    {'id': 'IN-0039', 'type': 'Electronics', 'time': '11:45 AM', 'status': 'Dispatched'},
-    {'id': 'OUT-0088', 'type': 'Documents', 'time': '10:00 AM', 'status': 'Dispatched'},
-  ];
+  static const _recentScans = <Map<String, String>>[];
 }
 
 class _CornerPainter extends CustomPainter {

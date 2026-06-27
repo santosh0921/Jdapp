@@ -136,18 +136,18 @@ class _WarehouseHomeScreenState extends State<WarehouseHomeScreen>
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: AppColors.warehouseColor.withValues(alpha: 0.3)),
                 ),
-                child: const Text('WH-007 · Bengaluru East · South Zone',
+                child: const Text('—',
                     style: TextStyle(color: AppColors.warehouseColor, fontSize: 11, fontWeight: FontWeight.w600)),
               ),
               const SizedBox(height: 20),
               // KPI strip
               Row(
                 children: [
-                  _HeroKpi(label: 'Total SKUs', value: '2,841', icon: Icons.inventory_2_rounded),
+                  const _HeroKpi(label: 'Total SKUs', value: '—', icon: Icons.inventory_2_rounded),
                   _vDiv(),
-                  _HeroKpi(label: 'Capacity Used', value: '74%', icon: Icons.warehouse_rounded),
+                  const _HeroKpi(label: 'Capacity Used', value: '—', icon: Icons.warehouse_rounded),
                   _vDiv(),
-                  _HeroKpi(label: 'Pending Scans', value: '18', icon: Icons.qr_code_rounded),
+                  const _HeroKpi(label: 'Pending Scans', value: '—', icon: Icons.qr_code_rounded),
                 ],
               ),
             ],
@@ -163,10 +163,7 @@ class _WarehouseHomeScreenState extends State<WarehouseHomeScreen>
   // ── Alerts ────────────────────────────────────────────────────────────────
 
   Widget _buildAlerts(bool dark, _Palette p) {
-    const alerts = [
-      _Alert(type: 'Low Stock', msg: 'SKU-0021 below threshold — 14 units remaining', color: 0xFFEF4444),
-      _Alert(type: 'Overdue', msg: 'JD-IND-4091 dispatch overdue by 2 hours', color: 0xFFFF9F2F),
-    ];
+    const alerts = <_Alert>[];
 
     return Column(
       children: alerts.map((a) => Container(
@@ -212,7 +209,7 @@ class _WarehouseHomeScreenState extends State<WarehouseHomeScreen>
               flex: 5,
               child: _BentoTall(
                 title: 'Inbound',
-                value: '127',
+                value: '—',
                 sub: 'parcels arriving',
                 icon: Icons.input_rounded,
                 color: AppColors.success,
@@ -229,7 +226,7 @@ class _WarehouseHomeScreenState extends State<WarehouseHomeScreen>
                 children: [
                   _BentoSmall(
                     title: 'Outbound',
-                    value: '94',
+                    value: '—',
                     icon: Icons.output_rounded,
                     color: AppColors.primary,
                     dark: dark,
@@ -239,7 +236,7 @@ class _WarehouseHomeScreenState extends State<WarehouseHomeScreen>
                   const SizedBox(height: 10),
                   _BentoSmall(
                     title: 'Returns',
-                    value: '12',
+                    value: '—',
                     icon: Icons.keyboard_return_rounded,
                     color: AppColors.error,
                     dark: dark,
@@ -257,7 +254,7 @@ class _WarehouseHomeScreenState extends State<WarehouseHomeScreen>
             Expanded(
               child: _BentoSmall(
                 title: 'Pending Dispatch',
-                value: '34',
+                value: '—',
                 icon: Icons.local_shipping_rounded,
                 color: AppColors.warning,
                 dark: dark,
@@ -269,7 +266,7 @@ class _WarehouseHomeScreenState extends State<WarehouseHomeScreen>
             Expanded(
               child: _BentoSmall(
                 title: 'Damaged Parcels',
-                value: '3',
+                value: '—',
                 icon: Icons.broken_image_rounded,
                 color: AppColors.error,
                 dark: dark,
@@ -281,7 +278,7 @@ class _WarehouseHomeScreenState extends State<WarehouseHomeScreen>
             Expanded(
               child: _BentoSmall(
                 title: 'Scan Queue',
-                value: '18',
+                value: '—',
                 icon: Icons.qr_code_scanner_rounded,
                 color: AppColors.saffron,
                 dark: dark,
@@ -331,11 +328,7 @@ class _WarehouseHomeScreenState extends State<WarehouseHomeScreen>
   // ── Inbound Queue ─────────────────────────────────────────────────────────
 
   Widget _buildInboundQueue(BuildContext context, bool dark, _Palette p) {
-    const items = [
-      _QueueItem(id: 'IN-5001', carrier: 'Delhivery', parcels: 34, weight: '48.2 kg', eta: '10:00 AM', status: 'arrived'),
-      _QueueItem(id: 'IN-5002', carrier: 'Ekart', parcels: 18, weight: '22.1 kg', eta: '11:30 AM', status: 'in_transit'),
-      _QueueItem(id: 'IN-5003', carrier: 'Bluedart', parcels: 52, weight: '71.8 kg', eta: '01:00 PM', status: 'in_transit'),
-    ];
+    const items = <_QueueItem>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,68 +343,73 @@ class _WarehouseHomeScreenState extends State<WarehouseHomeScreen>
           ],
         ),
         const SizedBox(height: 12),
-        _ClayCard(dark: dark, p: p, child: Column(
-          children: items.asMap().entries.map((e) {
-            final i = e.key;
-            final item = e.value;
-            final arrived = item.status == 'arrived';
-            return Column(
-              children: [
-                if (i > 0) Divider(height: 1, thickness: 1, color: p.border),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: (arrived ? AppColors.success : AppColors.primary).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(Icons.local_shipping_rounded,
-                            color: arrived ? AppColors.success : AppColors.primary, size: 18),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+        _ClayCard(dark: dark, p: p, child: items.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: Text('No inbound shipments', style: TextStyle(color: p.sub, fontSize: 13))),
+            )
+          : Column(
+              children: items.asMap().entries.map((e) {
+                final i = e.key;
+                final item = e.value;
+                final arrived = item.status == 'arrived';
+                return Column(
+                  children: [
+                    if (i > 0) Divider(height: 1, thickness: 1, color: p.border),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: (arrived ? AppColors.success : AppColors.primary).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(Icons.local_shipping_rounded,
+                                color: arrived ? AppColors.success : AppColors.primary, size: 18),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(item.carrier, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.text)),
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: (arrived ? AppColors.success : AppColors.primary).withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(arrived ? 'ARRIVED' : 'IN TRANSIT',
-                                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700,
-                                          color: arrived ? AppColors.success : AppColors.primary)),
+                                Row(
+                                  children: [
+                                    Text(item.carrier, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.text)),
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: (arrived ? AppColors.success : AppColors.primary).withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(arrived ? 'ARRIVED' : 'IN TRANSIT',
+                                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700,
+                                              color: arrived ? AppColors.success : AppColors.primary)),
+                                    ),
+                                  ],
                                 ),
+                                Text('${item.parcels} parcels · ${item.weight}',
+                                    style: TextStyle(fontSize: 11, color: p.sub)),
                               ],
                             ),
-                            Text('${item.parcels} parcels · ${item.weight}',
-                                style: TextStyle(fontSize: 11, color: p.sub)),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(item.id, style: TextStyle(fontSize: 10, color: p.sub)),
-                          Text(item.eta, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: p.text)),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(item.id, style: TextStyle(fontSize: 10, color: p.sub)),
+                              Text(item.eta, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: p.text)),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          }).toList(),
-        )),
+                    ),
+                  ],
+                );
+              }).toList(),
+            )),
       ],
     );
   }
@@ -419,11 +417,7 @@ class _WarehouseHomeScreenState extends State<WarehouseHomeScreen>
   // ── Dispatch Queue ────────────────────────────────────────────────────────
 
   Widget _buildDispatchQueue(BuildContext context, bool dark, _Palette p) {
-    const items = [
-      _DispatchItem(id: 'JD-IND-4820', destination: 'Mumbai', carrier: 'BlueDart', weight: '8.4 kg', ready: true, time: '14:00'),
-      _DispatchItem(id: 'JD-IND-4819', destination: 'Delhi', carrier: 'Delhivery', weight: '12.1 kg', ready: true, time: '14:30'),
-      _DispatchItem(id: 'JD-IND-4815', destination: 'Chennai', carrier: 'DTDC', weight: '5.2 kg', ready: false, time: '15:00'),
-    ];
+    const items = <_DispatchItem>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -438,53 +432,58 @@ class _WarehouseHomeScreenState extends State<WarehouseHomeScreen>
           ],
         ),
         const SizedBox(height: 12),
-        _ClayCard(dark: dark, p: p, child: Column(
-          children: items.asMap().entries.map((e) {
-            final i = e.key;
-            final item = e.value;
-            return Column(
-              children: [
-                if (i > 0) Divider(height: 1, thickness: 1, color: p.border),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: (item.ready ? AppColors.success : AppColors.warning).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(item.ready ? Icons.check_circle_rounded : Icons.hourglass_empty_rounded,
-                            color: item.ready ? AppColors.success : AppColors.warning, size: 18),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(item.id, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.text)),
-                            Text('${item.destination} · ${item.carrier} · ${item.weight}',
-                                style: TextStyle(fontSize: 11, color: p.sub)),
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+        _ClayCard(dark: dark, p: p, child: items.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: Text('No items ready for dispatch', style: TextStyle(color: p.sub, fontSize: 13))),
+            )
+          : Column(
+              children: items.asMap().entries.map((e) {
+                final i = e.key;
+                final item = e.value;
+                return Column(
+                  children: [
+                    if (i > 0) Divider(height: 1, thickness: 1, color: p.border),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                      child: Row(
                         children: [
-                          Text(item.time, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
-                              color: item.ready ? AppColors.success : AppColors.warning)),
-                          Text(item.ready ? 'Ready' : 'Pending', style: TextStyle(fontSize: 10, color: p.sub)),
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: (item.ready ? AppColors.success : AppColors.warning).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(item.ready ? Icons.check_circle_rounded : Icons.hourglass_empty_rounded,
+                                color: item.ready ? AppColors.success : AppColors.warning, size: 18),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(item.id, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: p.text)),
+                                Text('${item.destination} · ${item.carrier} · ${item.weight}',
+                                    style: TextStyle(fontSize: 11, color: p.sub)),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(item.time, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+                                  color: item.ready ? AppColors.success : AppColors.warning)),
+                              Text(item.ready ? 'Ready' : 'Pending', style: TextStyle(fontSize: 10, color: p.sub)),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          }).toList(),
-        )),
+                    ),
+                  ],
+                );
+              }).toList(),
+            )),
       ],
     );
   }

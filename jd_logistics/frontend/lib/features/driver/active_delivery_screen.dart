@@ -302,6 +302,13 @@ class _HeroDeliveryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final order = context.watch<DriverProvider>().activeDelivery;
+    final pickup = order?.pickupAddress ?? '';
+    final delivery = order?.deliveryAddress ?? '';
+    final route = pickup.isNotEmpty && delivery.isNotEmpty
+        ? '$pickup → $delivery'
+        : (pickup.isNotEmpty ? pickup : (delivery.isNotEmpty ? delivery : '—'));
+
     return _ClayCard(
       surfaceColor: surfaceColor,
       padding: const EdgeInsets.all(16),
@@ -329,7 +336,7 @@ class _HeroDeliveryCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Andheri East → Koramangala',
+                        route,
                         style: TextStyle(
                           color: subTextColor,
                           fontSize: 13,
