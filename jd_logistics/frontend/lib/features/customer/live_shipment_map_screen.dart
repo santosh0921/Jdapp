@@ -14,7 +14,7 @@ class LiveShipmentMapScreen extends StatefulWidget {
 
   const LiveShipmentMapScreen({
     super.key,
-    this.id = 'JDIN240001',
+    this.id = '',
     this.mode = 'road',
   });
 
@@ -273,7 +273,7 @@ class _FloatingMapStatus extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '$modeLabel • Mumbai → New Delhi',
+                  '$modeLabel • ${id.isNotEmpty ? id : 'Tracking'}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -423,7 +423,7 @@ class _RouteStopsCard extends StatelessWidget {
               ),
               _StopLine(),
               const _StopRow(
-                label: 'New Delhi',
+                label: 'Destination',
                 icon: Icons.location_on_rounded,
                 color: AppColors.error,
               ),
@@ -434,7 +434,7 @@ class _RouteStopsCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '1,418 km total',
+                '— km total',
                 style: TextStyle(
                   color: AppColors.subtext(context),
                   fontSize: 11,

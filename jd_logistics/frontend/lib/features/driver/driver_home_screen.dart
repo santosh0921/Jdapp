@@ -184,7 +184,12 @@ class _DriverHomeScreenState extends State<DriverHomeScreen>
               children: [
                 _StatusPill(isOnline: driver.isOnline),
                 const Spacer(),
-                Text('WH-007 → Destination', style: TextStyle(fontSize: 11, color: p.sub, fontWeight: FontWeight.w600)),
+                Text(
+                  driver.activeDelivery != null
+                      ? '${driver.activeDelivery!.trackingId.isNotEmpty ? driver.activeDelivery!.trackingId : driver.activeDelivery!.id} → Delivery'
+                      : '—',
+                  style: TextStyle(fontSize: 11, color: p.sub, fontWeight: FontWeight.w600),
+                ),
               ],
             ),
           ),

@@ -3,8 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
+import 'package:jd_style_logistics/providers/driver_provider.dart';
 
 class ProofOfDeliveryScreen extends StatefulWidget {
   const ProofOfDeliveryScreen({super.key});
@@ -68,6 +70,11 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen>
 
   @override
   Widget build(BuildContext context) {
+    final activeOrder = context.watch<DriverProvider>().activeDelivery;
+    final orderId = activeOrder != null
+        ? (activeOrder.trackingId.isNotEmpty ? activeOrder.trackingId : activeOrder.id)
+        : '—';
+
     return Scaffold(
       backgroundColor: _bg(context),
       body: SafeArea(
@@ -82,6 +89,7 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen>
               child: Column(
                 children: [
                   _Header(
+                    orderId: orderId,
                     textColor: _text(context),
                     subTextColor: _sub(context),
                     surfaceColor: _surface(context),
@@ -292,12 +300,14 @@ class _ProofOfDeliveryScreenState extends State<ProofOfDeliveryScreen>
 }
 
 class _Header extends StatelessWidget {
+  final String orderId;
   final Color textColor;
   final Color subTextColor;
   final Color surfaceColor;
   final VoidCallback onBack;
 
   const _Header({
+    required this.orderId,
     required this.textColor,
     required this.subTextColor,
     required this.surfaceColor,
@@ -325,7 +335,7 @@ class _Header extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Order #JD-2024-003',
+                    orderId != '—' ? 'Order #$orderId' : 'Proof of Delivery',
                     style: TextStyle(
                       color: subTextColor,
                       fontSize: 12,
