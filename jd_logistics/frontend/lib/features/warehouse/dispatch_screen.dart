@@ -120,78 +120,9 @@ class _DispatchScreenState extends State<DispatchScreen>
     );
   }
 
-  static const _pending = [
-    {
-      'id': 'OUT-0091',
-      'destination': 'Koramangala, Bengaluru',
-      'driver': 'Ramesh S.',
-      'weight': '2.1 kg',
-      'time': '3:00 PM',
-      'status': 'Ready',
-    },
-    {
-      'id': 'OUT-0092',
-      'destination': 'Whitefield, Bengaluru',
-      'driver': 'Unassigned',
-      'weight': '0.8 kg',
-      'time': '4:00 PM',
-      'status': 'Pending',
-    },
-    {
-      'id': 'OUT-0093',
-      'destination': 'Indiranagar, Bengaluru',
-      'driver': 'Unassigned',
-      'weight': '5.2 kg',
-      'time': '4:30 PM',
-      'status': 'Pending',
-    },
-  ];
-
-  static const _inTransit = [
-    {
-      'id': 'OUT-0088',
-      'destination': 'HSR Layout, Bengaluru',
-      'driver': 'Suresh K.',
-      'weight': '1.2 kg',
-      'time': '1:30 PM',
-      'status': 'In Transit',
-    },
-    {
-      'id': 'OUT-0089',
-      'destination': 'BTM Layout, Bengaluru',
-      'driver': 'Anil R.',
-      'weight': '3.5 kg',
-      'time': '12:45 PM',
-      'status': 'In Transit',
-    },
-  ];
-
-  static const _completed = [
-    {
-      'id': 'OUT-0085',
-      'destination': 'Jayanagar, Bengaluru',
-      'driver': 'Priya M.',
-      'weight': '0.5 kg',
-      'time': '10:15 AM',
-      'status': 'Delivered',
-    },
-    {
-      'id': 'OUT-0086',
-      'destination': 'Yelahanka, Bengaluru',
-      'driver': 'Ramesh S.',
-      'weight': '2.8 kg',
-      'time': '9:30 AM',
-      'status': 'Delivered',
-    },
-    {
-      'id': 'OUT-0087',
-      'destination': 'Electronic City, Bengaluru',
-      'driver': 'Suresh K.',
-      'weight': '4.1 kg',
-      'time': '8:50 AM',
-      'status': 'Delivered',
-    },
-  ];
+  static const _pending   = <Map<String, String>>[];
+  static const _inTransit = <Map<String, String>>[];
+  static const _completed = <Map<String, String>>[];
 }
 
 class _DispatchList extends StatelessWidget {

@@ -19,24 +19,24 @@ class _WarehouseProfileScreenState extends State<WarehouseProfileScreen> {
   bool _notifyDispatch = false;
 
   static const _warehouseInfo = _WarehouseInfo(
-    name: 'JD Hub — Bengaluru East',
-    code: 'WH-0007',
-    address: 'KIADB Industrial Area, Whitefield, Bengaluru, KA 560066',
-    zone: 'South Zone',
-    capacity: '12,000 sq ft',
-    maxWeight: '80,000 kg',
-    operatingHours: '06:00 AM – 11:00 PM',
-    manager: 'Ravi Kumar S.',
-    phone: '+91 98765 43210',
-    email: 'wh007@jdlogistics.in',
-    joinedDate: 'March 2023',
+    name: '—',
+    code: '—',
+    address: '—',
+    zone: '—',
+    capacity: '—',
+    maxWeight: '—',
+    operatingHours: '—',
+    manager: '—',
+    phone: '—',
+    email: '—',
+    joinedDate: '—',
   );
 
   static const _stats = [
-    _Stat(label: 'Active SKUs', value: '2,841', icon: Icons.inventory_2_rounded, color: 0xFF5EA2FF),
-    _Stat(label: 'Pending Inbound', value: '34', icon: Icons.input_rounded, color: 0xFF22C55E),
-    _Stat(label: 'Ready to Dispatch', value: '127', icon: Icons.output_rounded, color: 0xFFFF9F2F),
-    _Stat(label: 'Returns Today', value: '12', icon: Icons.keyboard_return_rounded, color: 0xFFEF4444),
+    _Stat(label: 'Active SKUs', value: '—', icon: Icons.inventory_2_rounded, color: 0xFF5EA2FF),
+    _Stat(label: 'Pending Inbound', value: '—', icon: Icons.input_rounded, color: 0xFF22C55E),
+    _Stat(label: 'Ready to Dispatch', value: '—', icon: Icons.output_rounded, color: 0xFFFF9F2F),
+    _Stat(label: 'Returns Today', value: '—', icon: Icons.keyboard_return_rounded, color: 0xFFEF4444),
   ];
 
   @override

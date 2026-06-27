@@ -59,41 +59,6 @@ class _SupportScreenState extends State<SupportScreen>
     ),
   ];
 
-  static const _tickets = [
-    _TicketData(
-      id: 'TKT-JD-2048',
-      shipmentId: 'JD-IND-2048',
-      title: 'Delivery ETA clarification',
-      status: 'In Progress',
-      priority: 'Medium',
-      team: 'Delivery Desk',
-      date: 'Today',
-      color: Color(0xFF2563EB),
-      icon: Icons.local_shipping_rounded,
-    ),
-    _TicketData(
-      id: 'TKT-JD-9172',
-      shipmentId: 'JD-EXP-9172',
-      title: 'Customs document review',
-      status: 'Open',
-      priority: 'High',
-      team: 'Customs Team',
-      date: '42 min ago',
-      color: Color(0xFFFF8A00),
-      icon: Icons.flight_takeoff_rounded,
-    ),
-    _TicketData(
-      id: 'TKT-JD-8841',
-      shipmentId: 'JD-DLV-8841',
-      title: 'Invoice copy request',
-      status: 'Resolved',
-      priority: 'Low',
-      team: 'Billing Desk',
-      date: 'Yesterday',
-      color: Color(0xFF16A34A),
-      icon: Icons.receipt_long_rounded,
-    ),
-  ];
 
   @override
   void initState() {
@@ -169,10 +134,18 @@ class _SupportScreenState extends State<SupportScreen>
                                       'Track open cases, customs queries and shipment support',
                                 ),
                                 const SizedBox(height: 14),
-                                ..._tickets.map(
-                                  (ticket) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: _TicketTile(ticket: ticket),
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 16),
+                                  child: Center(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.inbox_rounded, size: 40, color: Colors.black26),
+                                        SizedBox(height: 8),
+                                        Text('No support tickets yet',
+                                            style: TextStyle(color: Colors.black45, fontSize: 13)),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ],
@@ -646,95 +619,6 @@ class _ContactOptionState extends State<_ContactOption> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _TicketTile extends StatelessWidget {
-  final _TicketData ticket;
-
-  const _TicketTile({required this.ticket});
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = _ClayPalette.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: palette.background,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: palette.highlight,
-            offset: const Offset(-4, -4),
-            blurRadius: 8,
-          ),
-          BoxShadow(
-            color: palette.shadow,
-            offset: const Offset(4, 4),
-            blurRadius: 10,
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          _Sticker(icon: ticket.icon, color: ticket.color),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  ticket.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: palette.text,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${ticket.id} • ${ticket.shipmentId}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: palette.subText,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    _MiniPill(label: ticket.status, color: ticket.color),
-                    _MiniPill(
-                      label: ticket.priority,
-                      color: const Color(0xFFFF8A00),
-                    ),
-                    _MiniPill(
-                      label: ticket.team,
-                      color: const Color(0xFF2563EB),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            ticket.date,
-            style: TextStyle(
-              color: palette.subText,
-              fontWeight: FontWeight.w700,
-              fontSize: 11,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1276,30 +1160,6 @@ class _CountryData {
     required this.region,
     required this.currency,
     required this.language,
-  });
-}
-
-class _TicketData {
-  final String id;
-  final String shipmentId;
-  final String title;
-  final String status;
-  final String priority;
-  final String team;
-  final String date;
-  final Color color;
-  final IconData icon;
-
-  const _TicketData({
-    required this.id,
-    required this.shipmentId,
-    required this.title,
-    required this.status,
-    required this.priority,
-    required this.team,
-    required this.date,
-    required this.color,
-    required this.icon,
   });
 }
 
