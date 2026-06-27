@@ -37,14 +37,6 @@ class _OrderData {
 }
 
 class _AvailableOrdersScreenState extends State<AvailableOrdersScreen> {
-  static const _fallback = [
-    _OrderData(id: 'JD-24001', pickup: 'HSR Layout, Bengaluru', delivery: 'Koramangala, Bengaluru', distance: '3.2 km', earnings: 85, packageType: 'Document', items: 1, weightKg: 0.3),
-    _OrderData(id: 'JD-24002', pickup: 'Whitefield, Bengaluru', delivery: 'Electronic City, Bengaluru', distance: '18.6 km', earnings: 220, packageType: 'Parcel', items: 2, weightKg: 4.5),
-    _OrderData(id: 'JD-24003', pickup: 'MG Road, Bengaluru', delivery: 'Indiranagar, Bengaluru', distance: '5.1 km', earnings: 110, packageType: 'Document', items: 3, weightKg: 0.8),
-    _OrderData(id: 'JD-24004', pickup: 'Sarjapur, Bengaluru', delivery: 'Marathahalli, Bengaluru', distance: '7.8 km', earnings: 160, packageType: 'Parcel', items: 1, weightKg: 2.1),
-    _OrderData(id: 'JD-24005', pickup: 'Yelahanka, Bengaluru', delivery: 'Hebbal, Bengaluru', distance: '9.4 km', earnings: 190, packageType: 'Parcel', items: 4, weightKg: 6.2),
-  ];
-
   static _OrderData _fromShipment(ShipmentModel s) => _OrderData(
         id: s.trackingId.isNotEmpty ? s.trackingId : s.id,
         pickup: s.pickupAddress,
@@ -69,7 +61,7 @@ class _AvailableOrdersScreenState extends State<AvailableOrdersScreen> {
     final theme = Theme.of(context);
     final dp = context.watch<DriverProvider>();
     final live = dp.availableOrders;
-    final pending = live.isNotEmpty ? live.map(_fromShipment).toList() : List<_OrderData>.from(_fallback);
+    final pending = live.map(_fromShipment).toList();
 
     return GradientBackground(
       child: Scaffold(
@@ -162,13 +154,11 @@ class _AvailableOrdersScreenState extends State<AvailableOrdersScreen> {
                           order: pending[i],
                           onAccept: () async {
                             HapticFeedback.mediumImpact();
-                            final apiId = live.isNotEmpty ? live[i].id : pending[i].id;
-                            await dp.acceptOrder(apiId);
+                            await dp.acceptOrder(live[i].id);
                           },
                           onDecline: () async {
                             HapticFeedback.lightImpact();
-                            final apiId = live.isNotEmpty ? live[i].id : pending[i].id;
-                            await dp.rejectOrder(apiId);
+                            await dp.rejectOrder(live[i].id);
                           },
                         ),
                       ),

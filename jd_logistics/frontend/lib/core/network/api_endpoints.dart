@@ -29,10 +29,11 @@ class ApiEndpoints {
   static const String courierOrders   = '/courier/orders';
   static String courierOrderById(String id)    => '/courier/orders/$id';
   static String cancelCourierOrder(String id)  => '/courier/orders/$id/cancel';
-  static String courierTracking(String id)     => '/courier/orders/$id/tracking';
+  // Courier tracking uses the unified /tracking/:id endpoint
+  static String courierTracking(String id)     => '/tracking/$id';
 
   // ── Driver ────────────────────────────────────────────────────────────────
-  static const String driverAvailableOrders = '/driver/orders/available';
+  static const String driverAvailableOrders = '/driver/available-orders';
   static String driverAcceptOrder(String id)   => '/driver/orders/$id/accept';
   static String driverRejectOrder(String id)   => '/driver/orders/$id/reject';
   static const String driverActiveOrders    = '/driver/orders/active';
@@ -47,33 +48,43 @@ class ApiEndpoints {
   static const String driverLocation        = '/driver/location';
 
   // ── Logistics Orders ──────────────────────────────────────────────────────
-  static const String logisticsEstimate = '/logistics/orders/estimate';
+  static const String logisticsEstimate = '/logistics/estimate';
   static const String logisticsOrders   = '/logistics/orders';
   static String logisticsOrderById(String id)    => '/logistics/orders/$id';
   static String cancelLogisticsOrder(String id)  => '/logistics/orders/$id/cancel';
-  static String logisticsTracking(String id)     => '/logistics/orders/$id/tracking';
+  // Logistics tracking uses the unified /tracking/:id endpoint
+  static String logisticsTracking(String id)     => '/tracking/$id';
 
   // ── Master data (from /api/v1/master) ────────────────────────────────────
   static const String masterGoodsCategories  = '/master/goods-categories';
   static const String masterVehicleTypes     = '/master/vehicle-types';
   static const String masterTransportModes   = '/master/transport-modes';
   static const String masterCountries        = '/master/countries';
+  static const String masterStates           = '/master/states';
   static const String masterPorts            = '/master/ports';
+  static const String masterRoles            = '/master/roles';
   static const String masterShipmentStatuses = '/master/shipment-statuses';
   static const String masterPaymentMethods   = '/master/payment-methods';
+  static const String masterWarehouseTypes   = '/master/warehouse-types';
   static const String masterGSTRates         = '/master/gst-rates';
   static const String masterHSNCodes         = '/master/hsn-codes';
   static const String masterPricingRules     = '/master/pricing-rules';
+  static const String masterFuelRates        = '/master/fuel-rates';
+  static const String masterInsuranceRates   = '/master/insurance-rates';
 
   // ── Pricing Engine ────────────────────────────────────────────────────────
-  static const String pricingCourierEstimate   = '/pricing/courier-estimate';
-  static const String pricingLogisticsEstimate = '/pricing/logistics-estimate';
+  // Backend has /pricing/estimate and /pricing/multi-modal only
+  static const String pricingCourierEstimate   = '/pricing/estimate';
+  static const String pricingLogisticsEstimate = '/pricing/estimate';
   static const String pricingMultiModal        = '/pricing/multi-modal';
 
   // ── Payments ──────────────────────────────────────────────────────────────
-  static const String createPaymentOrder = '/payments/create-order';
+  // Backend: /payments/balance, /payments/add-money, /payments/withdraw, /payments/history
+  // createPaymentOrder → use addMoney instead (/payments/create-order does not exist)
+  static const String createPaymentOrder = '/payments/add-money';
   static const String verifyPayment      = '/payments/verify';
-  static const String paymentMethods     = '/payments/methods';
+  // paymentMethods → served from master data endpoint
+  static const String paymentMethods     = '/master/payment-methods';
   static const String paymentHistory     = '/payments/history';
   static const String paymentBalance     = '/payments/balance';
   static const String addMoney           = '/payments/add-money';
@@ -89,8 +100,9 @@ class ApiEndpoints {
   // ── Admin Dashboard & Lists ───────────────────────────────────────────────
   static const String adminDashboard       = '/admin/dashboard';
   static const String adminShipments       = '/admin/shipments';
-  static const String adminCourierOrders   = '/admin/courier-orders';
-  static const String adminLogisticsOrders = '/admin/logistics-orders';
+  // Note: backend uses /admin/shipments for all order types (no separate courier/logistics)
+  static const String adminCourierOrders   = '/admin/shipments';
+  static const String adminLogisticsOrders = '/admin/shipments';
   static const String adminUsers           = '/admin/users';
   static const String adminDrivers         = '/admin/drivers';
   static const String adminFleet           = '/admin/fleet';
@@ -101,11 +113,17 @@ class ApiEndpoints {
   static const String adminAuditLogs       = '/admin/audit-logs';
   static const String adminStats           = '/admin/stats';
 
-  // ── Admin Warehouses ──────────────────────────────────────────────────────
-  static const String adminWarehouses                      = '/admin/warehouses';
-  static String adminWarehouseById(String id)              => '/admin/warehouses/$id';
-  static String adminWarehouseInventory(String id)         => '/admin/warehouses/$id/inventory';
-  static String adminWarehouseOrders(String id)            => '/admin/warehouses/$id/orders';
+  // ── Admin Fleet ───────────────────────────────────────────────────────────
+  static const String adminFleetSummary     = '/admin/fleet/summary';
+  static const String adminFleetVehicles    = '/admin/fleet/vehicles';
+  static const String adminFleetMaintenance = '/admin/fleet/maintenance';
+  static String adminVehicleById(String id) => '/admin/fleet/vehicles/$id';
+
+  // Warehouse aliases → remap to fleet endpoints (backend has no /admin/warehouses)
+  static const String adminWarehouses                      = '/admin/fleet/vehicles';
+  static String adminWarehouseById(String id)              => '/admin/fleet/vehicles/$id';
+  static String adminWarehouseInventory(String id)         => '/admin/fleet/vehicles/$id';
+  static String adminWarehouseOrders(String id)            => '/admin/fleet/vehicles/$id';
 
   // ── Warehouse (operator) ──────────────────────────────────────────────────
   static const String warehouseProfile   = '/warehouse/profile';

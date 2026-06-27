@@ -515,25 +515,25 @@ class _StatsGrid extends StatelessWidget {
         _StatCard(
           icon: Icons.local_shipping_rounded,
           label: 'Deliveries',
-          value: '48',
+          value: '—',
           color: AppColors.primary,
         ),
         _StatCard(
           icon: Icons.public_rounded,
           label: 'Countries',
-          value: '06',
+          value: '—',
           color: AppColors.portOrange,
         ),
         _StatCard(
           icon: Icons.location_on_rounded,
           label: 'Addresses',
-          value: '04',
+          value: '—',
           color: AppColors.success,
         ),
         _StatCard(
           icon: Icons.verified_rounded,
           label: 'KYC',
-          value: 'Done',
+          value: '—',
           color: AppColors.oceanColor,
         ),
       ],
@@ -548,6 +548,9 @@ class _LogisticsIdentityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.read<AuthProvider>();
+    final userId = auth.user?.id ?? '—';
+
     return GlassCard(
       borderRadius: 32,
       padding: const EdgeInsets.all(18),
@@ -563,10 +566,10 @@ class _LogisticsIdentityCard extends StatelessWidget {
             spacing: 12,
             runSpacing: 12,
             children: [
-              const _IdentityPill(
+              _IdentityPill(
                 icon: Icons.badge_rounded,
                 label: 'Customer ID',
-                value: 'JD-CUS-2048',
+                value: userId,
                 color: AppColors.primary,
               ),
               _IdentityPill(
@@ -578,19 +581,19 @@ class _LogisticsIdentityCard extends StatelessWidget {
               const _IdentityPill(
                 icon: Icons.workspace_premium_rounded,
                 label: 'Customer Tier',
-                value: 'Gold',
+                value: '—',
                 color: AppColors.saffron,
               ),
               const _IdentityPill(
                 icon: Icons.group_rounded,
                 label: 'Referrals',
-                value: '12',
+                value: '—',
                 color: AppColors.success,
               ),
               const _IdentityPill(
                 icon: Icons.flight_takeoff_rounded,
                 label: 'Preferred Mode',
-                value: 'Road + Air',
+                value: '—',
                 color: AppColors.primary,
               ),
               const _IdentityPill(
@@ -625,10 +628,10 @@ class _KycStatusCard extends StatelessWidget {
             spacing: 10,
             runSpacing: 10,
             children: const [
-              _VerifyChip(label: 'KYC Verified', color: AppColors.success),
-              _VerifyChip(label: 'PAN Linked', color: AppColors.primary),
-              _VerifyChip(label: 'Address Verified', color: AppColors.oceanColor),
-              _VerifyChip(label: 'GST Optional', color: AppColors.portOrange),
+              _VerifyChip(label: 'KYC Pending', color: AppColors.portOrange),
+              _VerifyChip(label: 'PAN: Not Linked', color: AppColors.portOrange),
+              _VerifyChip(label: 'Address: Pending', color: AppColors.portOrange),
+              _VerifyChip(label: 'GST: Optional', color: AppColors.primary),
             ],
           ),
         ],

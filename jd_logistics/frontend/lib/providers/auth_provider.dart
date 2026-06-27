@@ -204,9 +204,10 @@ class AuthProvider extends ChangeNotifier {
       if (finalRole != backendRole) {
         try {
           await AuthService.instance.selectRole(finalRole);
-        } catch (_) {
-          // Best-effort — routing still works with locally stored role;
-          // some protected endpoints may still return 403 if role wasn't persisted.
+        } catch (e) {
+          // Admin MUST have the correct JWT — without it every /admin/* call returns 403.
+          if (finalRole == 'admin') rethrow;
+          // For other roles silently continue — courier_customer features still work.
         }
       }
 

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
@@ -106,7 +107,8 @@ class _CustomerNotificationsScreenState
 
   Future<void> _loadNotifications() async {
     final models = await NotificationService.instance.getNotifications();
-    if (!mounted || models.isEmpty) return;
+    if (!mounted) return;
+    // Always set _liveNotifications (even empty) so we never fall through to mock data in release
     setState(() => _liveNotifications = models.map(_fromModel).toList());
   }
 
@@ -253,7 +255,7 @@ class _CustomerNotificationsScreenState
                           motion: _motion,
                         ),
                         const SizedBox(height: 18),
-                        _SummaryGrid(wide: wide),
+                        _SummaryGrid(wide: wide, notifications: _liveNotifications),
                         const SizedBox(height: 18),
                         const _CategoryChips(),
                         const SizedBox(height: 18),
@@ -279,7 +281,36 @@ class _CustomerNotificationsScreenState
   List<Widget> _groupedNotifications() {
     final groups = ['Recent', 'Today', 'Yesterday', 'Older'];
     final widgets = <Widget>[];
-    final source = _liveNotifications ?? _notifications;
+
+    // In release: use only live data. In debug: fall back to mock when live is null (not yet loaded).
+    final source = _liveNotifications ?? (kDebugMode ? _notifications : const <_NotificationData>[]);
+
+    if (source.isEmpty && _liveNotifications != null) {
+      return [
+        const SizedBox(height: 24),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.notifications_off_rounded,
+                  color: AppColors.subtext(context), size: 48),
+              const SizedBox(height: 12),
+              Text('No notifications yet',
+                  style: TextStyle(
+                      color: AppColors.text(context),
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15)),
+              const SizedBox(height: 4),
+              Text('Your shipment alerts will appear here',
+                  style: TextStyle(
+                      color: AppColors.subtext(context),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13)),
+            ],
+          ),
+        ),
+      ];
+    }
 
     for (final group in groups) {
       final items = source.where((item) => item.group == group).toList();
@@ -474,11 +505,24 @@ class _HeroVisual extends StatelessWidget {
 
 class _SummaryGrid extends StatelessWidget {
   final bool wide;
+  final List<_NotificationData>? notifications;
 
-  const _SummaryGrid({required this.wide});
+  const _SummaryGrid({required this.wide, this.notifications});
 
   @override
   Widget build(BuildContext context) {
+    final all = notifications ?? const <_NotificationData>[];
+    final unread    = all.where((n) => n.unread).length;
+    final shipment  = all.where((n) => n.tag == 'Shipment').length;
+    final customs   = all.where((n) => n.tag == 'Customs').length;
+    final payment   = all.where((n) => n.tag == 'Payment').length;
+    final delivery  = all.where((n) => n.tag == 'Delivery' || n.tag == 'Delivered').length;
+    final driver    = all.where((n) => n.tag == 'Driver').length;
+    final total     = all.length;
+    final other     = all.where((n) => !['Shipment','Customs','Payment','Delivery','Delivered','Driver'].contains(n.tag)).length;
+
+    String v(int count) => notifications == null ? '—' : '$count';
+
     return GridView.count(
       crossAxisCount: wide ? 4 : 2,
       crossAxisSpacing: 12,
@@ -486,55 +530,15 @@ class _SummaryGrid extends StatelessWidget {
       childAspectRatio: wide ? 1.5 : 1.22,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      children: const [
-        _SummaryCard(
-          icon: Icons.mark_email_unread_rounded,
-          label: 'Unread',
-          value: '2',
-          color: AppColors.primary,
-        ),
-        _SummaryCard(
-          icon: Icons.local_shipping_rounded,
-          label: 'Shipment',
-          value: '14',
-          color: AppColors.portOrange,
-        ),
-        _SummaryCard(
-          icon: Icons.public_rounded,
-          label: 'Customs',
-          value: '3',
-          color: AppColors.success,
-        ),
-        _SummaryCard(
-          icon: Icons.payments_rounded,
-          label: 'Payments',
-          value: '5',
-          color: AppColors.oceanColor,
-        ),
-        _SummaryCard(
-          icon: Icons.warehouse_rounded,
-          label: 'Warehouse',
-          value: '6',
-          color: AppColors.statusCustoms,
-        ),
-        _SummaryCard(
-          icon: Icons.flight_takeoff_rounded,
-          label: 'International',
-          value: '4',
-          color: AppColors.saffron,
-        ),
-        _SummaryCard(
-          icon: Icons.verified_rounded,
-          label: 'Delivered',
-          value: '9',
-          color: AppColors.success,
-        ),
-        _SummaryCard(
-          icon: Icons.warning_rounded,
-          label: 'Priority',
-          value: '1',
-          color: AppColors.error,
-        ),
+      children: [
+        _SummaryCard(icon: Icons.mark_email_unread_rounded, label: 'Unread',     value: v(unread),   color: AppColors.primary),
+        _SummaryCard(icon: Icons.local_shipping_rounded,    label: 'Shipment',   value: v(shipment), color: AppColors.portOrange),
+        _SummaryCard(icon: Icons.public_rounded,            label: 'Customs',    value: v(customs),  color: AppColors.success),
+        _SummaryCard(icon: Icons.payments_rounded,          label: 'Payments',   value: v(payment),  color: AppColors.oceanColor),
+        _SummaryCard(icon: Icons.verified_rounded,          label: 'Delivered',  value: v(delivery), color: AppColors.success),
+        _SummaryCard(icon: Icons.delivery_dining_rounded,   label: 'Driver',     value: v(driver),   color: AppColors.driverColor),
+        _SummaryCard(icon: Icons.notifications_rounded,     label: 'Total',      value: v(total),    color: AppColors.saffron),
+        _SummaryCard(icon: Icons.info_outline_rounded,      label: 'Other',      value: v(other),    color: AppColors.error),
       ],
     );
   }

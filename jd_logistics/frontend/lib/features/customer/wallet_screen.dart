@@ -1,5 +1,3 @@
-// frontend/lib/features/customer/presentation/wallet_screen.dart
-
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -9,6 +7,8 @@ import 'package:jd_style_logistics/core/utils/helpers.dart';
 import 'package:jd_style_logistics/core/widgets/custom_app_bar.dart';
 import 'package:jd_style_logistics/core/widgets/glass_card.dart';
 import 'package:jd_style_logistics/core/widgets/gradient_background.dart';
+import 'package:jd_style_logistics/models/payment_model.dart';
+import 'package:jd_style_logistics/services/payment_service.dart';
 
 class CustomerWalletScreen extends StatefulWidget {
   const CustomerWalletScreen({super.key});
@@ -21,6 +21,12 @@ class _CustomerWalletScreenState extends State<CustomerWalletScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _motion;
 
+  WalletModel? _wallet;
+  List<PaymentTransactionModel> _txList = [];
+  bool _loading = true;
+  String? _error;
+  bool _addingMoney = false;
+
   static const _country = _CountryData(
     countryName: 'India',
     flag: '🇮🇳',
@@ -29,65 +35,6 @@ class _CustomerWalletScreenState extends State<CustomerWalletScreen>
     language: 'English / Hindi',
   );
 
-  static const _transactions = [
-    _WalletTransaction(
-      id: 'WLT-JD-2048',
-      title: 'Shipment Payment',
-      amount: '- ₹499',
-      date: 'Today • 10:20 AM',
-      shipmentId: 'JDIN240001',
-      type: 'Road Shipment',
-      status: 'Paid',
-      countryFlag: '🇮🇳',
-      currency: 'INR',
-      icon: Icons.local_shipping_rounded,
-      color: AppColors.roadColor,
-      debit: true,
-    ),
-    _WalletTransaction(
-      id: 'WLT-JD-4501',
-      title: 'Wallet Top Up',
-      amount: '+ ₹2,000',
-      date: 'Yesterday • 08:45 PM',
-      shipmentId: 'JD-WALLET',
-      type: 'Wallet Credit',
-      status: 'Success',
-      countryFlag: '🇮🇳',
-      currency: 'INR',
-      icon: Icons.account_balance_wallet_rounded,
-      color: AppColors.success,
-      debit: false,
-    ),
-    _WalletTransaction(
-      id: 'WLT-JD-9172',
-      title: 'International Freight',
-      amount: '- ₹1,299 / USD 15',
-      date: 'Jun 15 • 03:15 PM',
-      shipmentId: 'JDAIR240801',
-      type: 'Air Freight',
-      status: 'Paid',
-      countryFlag: '🇦🇪',
-      currency: 'AED',
-      icon: Icons.flight_takeoff_rounded,
-      color: AppColors.airColor,
-      debit: true,
-    ),
-    _WalletTransaction(
-      id: 'WLT-JD-8841',
-      title: 'Shipping Credit Reward',
-      amount: '+ ₹250',
-      date: 'Jun 14 • 06:40 PM',
-      shipmentId: 'JD-REWARD',
-      type: 'Reward Credit',
-      status: 'Credited',
-      countryFlag: '🇮🇳',
-      currency: 'INR',
-      icon: Icons.card_giftcard_rounded,
-      color: AppColors.oceanColor,
-      debit: false,
-    ),
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -95,6 +42,72 @@ class _CustomerWalletScreenState extends State<CustomerWalletScreen>
       vsync: this,
       duration: const Duration(seconds: 10),
     )..repeat();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      final wallet = await PaymentService.instance.getWallet();
+      final txList = await PaymentService.instance.getHistory();
+      if (!mounted) return;
+      setState(() { _wallet = wallet; _txList = txList; _loading = false; });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  Future<void> _showAddMoneyDialog() async {
+    final ctrl = TextEditingController();
+    final amount = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Money to Wallet'),
+        content: TextField(
+          controller: ctrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Amount (₹)',
+            prefixText: '₹ ',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final v = double.tryParse(ctrl.text.trim());
+              if (v != null && v > 0) Navigator.pop(ctx, v);
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    if (amount == null || !mounted) return;
+    setState(() => _addingMoney = true);
+    try {
+      await PaymentService.instance.addMoney(amount, 'UPI');
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('₹${amount.toStringAsFixed(0)} added to wallet'),
+        backgroundColor: AppColors.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Failed to add money: $e'),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+    } finally {
+      if (mounted) setState(() => _addingMoney = false);
+    }
   }
 
   @override
@@ -132,11 +145,22 @@ class _CustomerWalletScreenState extends State<CustomerWalletScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _WalletHero(country: _country, motion: _motion),
+                        _WalletHero(
+                          country: _country,
+                          motion: _motion,
+                          balance: _wallet?.balance ?? 0,
+                        ),
                         const SizedBox(height: 18),
-                        _WalletStatsGrid(wide: wide, tablet: tablet),
+                        _WalletStatsGrid(
+                          wide: wide,
+                          tablet: tablet,
+                          balance: _wallet?.balance,
+                        ),
                         const SizedBox(height: 18),
-                        _WalletActionsGrid(wide: wide),
+                        _WalletActionsGrid(
+                          wide: wide,
+                          onAddMoney: _addingMoney ? null : _showAddMoneyDialog,
+                        ),
                         const SizedBox(height: 18),
                         const _RewardsCard(),
                         const SizedBox(height: 18),
@@ -144,16 +168,22 @@ class _CustomerWalletScreenState extends State<CustomerWalletScreen>
                         const SizedBox(height: 18),
                         const _SectionTitle(
                           title: 'Transaction History',
-                          subtitle:
-                              'Wallet credits, rewards and shipment payments',
+                          subtitle: 'Wallet credits, rewards and shipment payments',
                         ),
                         const SizedBox(height: 12),
-                        ..._transactions.map(
-                          (item) => Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _TransactionCard(item: item),
+                        if (_loading)
+                          const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+                        else if (_error != null)
+                          _ErrorRetry(message: _error!, onRetry: _loadData)
+                        else if (_txList.isEmpty)
+                          _EmptyTransactions()
+                        else
+                          ..._txList.map(
+                            (item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _LiveTransactionCard(item: item),
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -170,10 +200,12 @@ class _CustomerWalletScreenState extends State<CustomerWalletScreen>
 class _WalletHero extends StatelessWidget {
   final _CountryData country;
   final Animation<double> motion;
+  final double balance;
 
   const _WalletHero({
     required this.country,
     required this.motion,
+    this.balance = 0,
   });
 
   @override
@@ -212,7 +244,7 @@ class _WalletHero extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    Helpers.formatCurrency(0),
+                    Helpers.formatCurrency(balance),
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                           color: AppColors.text(context),
                           fontWeight: FontWeight.w900,
@@ -246,7 +278,7 @@ class _WalletHero extends StatelessWidget {
                         color: AppColors.success,
                       ),
                       const _MiniPill(
-                        label: 'Gold Tier',
+                        label: 'JD Wallet',
                         color: AppColors.oceanColor,
                       ),
                     ],
@@ -323,14 +355,17 @@ class _HeroWalletVisual extends StatelessWidget {
 class _WalletStatsGrid extends StatelessWidget {
   final bool wide;
   final bool tablet;
+  final double? balance;
 
   const _WalletStatsGrid({
     required this.wide,
     required this.tablet,
+    this.balance,
   });
 
   @override
   Widget build(BuildContext context) {
+    final balStr = balance != null ? Helpers.formatCurrency(balance!) : '—';
     return GridView.count(
       crossAxisCount: tablet ? 3 : (wide ? 3 : 2),
       crossAxisSpacing: 12,
@@ -338,43 +373,13 @@ class _WalletStatsGrid extends StatelessWidget {
       childAspectRatio: wide ? 1.45 : 1.12,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      children: const [
-        _WalletStat(
-          icon: Icons.account_balance_wallet_rounded,
-          label: 'Wallet Balance',
-          value: '₹0',
-          color: AppColors.primary,
-        ),
-        _WalletStat(
-          icon: Icons.redeem_rounded,
-          label: 'Shipping Credits',
-          value: '₹750',
-          color: AppColors.success,
-        ),
-        _WalletStat(
-          icon: Icons.stars_rounded,
-          label: 'Reward Coins',
-          value: '2,450',
-          color: AppColors.portOrange,
-        ),
-        _WalletStat(
-          icon: Icons.public_rounded,
-          label: 'Global Payments',
-          value: '06',
-          color: AppColors.oceanColor,
-        ),
-        _WalletStat(
-          icon: Icons.payments_rounded,
-          label: 'Monthly Spend',
-          value: '₹12.3K',
-          color: AppColors.statusCustoms,
-        ),
-        _WalletStat(
-          icon: Icons.workspace_premium_rounded,
-          label: 'Active Rewards',
-          value: '04',
-          color: AppColors.saffron,
-        ),
+      children: [
+        _WalletStat(icon: Icons.account_balance_wallet_rounded, label: 'Wallet Balance',   value: balStr, color: AppColors.primary),
+        _WalletStat(icon: Icons.redeem_rounded,                  label: 'Shipping Credits', value: '—',    color: AppColors.success),
+        _WalletStat(icon: Icons.stars_rounded,                   label: 'Reward Coins',    value: '—',    color: AppColors.portOrange),
+        _WalletStat(icon: Icons.public_rounded,                  label: 'Global Payments', value: '—',    color: AppColors.oceanColor),
+        _WalletStat(icon: Icons.payments_rounded,                label: 'Monthly Spend',   value: '—',    color: AppColors.statusCustoms),
+        _WalletStat(icon: Icons.workspace_premium_rounded,       label: 'Active Rewards',  value: '—',    color: AppColors.saffron),
       ],
     );
   }
@@ -382,8 +387,9 @@ class _WalletStatsGrid extends StatelessWidget {
 
 class _WalletActionsGrid extends StatelessWidget {
   final bool wide;
+  final VoidCallback? onAddMoney;
 
-  const _WalletActionsGrid({required this.wide});
+  const _WalletActionsGrid({required this.wide, this.onAddMoney});
 
   @override
   Widget build(BuildContext context) {
@@ -394,30 +400,38 @@ class _WalletActionsGrid extends StatelessWidget {
       childAspectRatio: wide ? 1.5 : 1.1,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      children: const [
+      children: [
         _ActionCard(
           icon: Icons.add_rounded,
           title: 'Add Money',
           subtitle: 'Top up wallet instantly',
           color: AppColors.success,
+          onTap: onAddMoney,
         ),
         _ActionCard(
           icon: Icons.send_rounded,
           title: 'Transfer',
-          subtitle: 'Send wallet balance',
+          subtitle: 'Coming soon',
           color: AppColors.primary,
+          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Wallet transfer coming soon'), behavior: SnackBarBehavior.floating),
+          ),
         ),
         _ActionCard(
           icon: Icons.card_giftcard_rounded,
           title: 'Redeem',
-          subtitle: 'Use reward coins',
+          subtitle: 'Coming soon',
           color: AppColors.portOrange,
+          onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Rewards redemption coming soon'), behavior: SnackBarBehavior.floating),
+          ),
         ),
         _ActionCard(
           icon: Icons.receipt_long_rounded,
           title: 'History',
           subtitle: 'View wallet ledger',
           color: AppColors.oceanColor,
+          onTap: () {},
         ),
       ],
     );
@@ -477,12 +491,14 @@ class _ActionCard extends StatefulWidget {
   final String title;
   final String subtitle;
   final Color color;
+  final VoidCallback? onTap;
 
   const _ActionCard({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.color,
+    this.onTap,
   });
 
   @override
@@ -495,6 +511,7 @@ class _ActionCardState extends State<_ActionCard> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      onTap: widget.onTap,
       onTapDown: (_) => setState(() => _down = true),
       onTapCancel: () => setState(() => _down = false),
       onTapUp: (_) => setState(() => _down = false),
@@ -582,22 +599,22 @@ class _RewardsCard extends StatelessWidget {
                   _CreditTile(
                     icon: Icons.stars_rounded,
                     title: 'Reward Coins',
-                    value: '2,450',
+                    value: '—',
                     subtitle: 'Redeem on shipping',
                     color: AppColors.portOrange,
                   ),
                   _CreditTile(
                     icon: Icons.redeem_rounded,
                     title: 'Shipping Credits',
-                    value: '₹750',
-                    subtitle: 'Valid for 30 days',
+                    value: '—',
+                    subtitle: 'Earn on shipments',
                     color: AppColors.primary,
                   ),
                   _CreditTile(
                     icon: Icons.workspace_premium_rounded,
                     title: 'Wallet Tier',
-                    value: 'Gold',
-                    subtitle: 'Priority support enabled',
+                    value: '—',
+                    subtitle: 'Complete KYC to unlock',
                     color: AppColors.success,
                   ),
                 ],
@@ -712,74 +729,115 @@ class _CreditTile extends StatelessWidget {
     );
   }
 }
-class _TransactionCard extends StatelessWidget {
-  final _WalletTransaction item;
+class _LiveTransactionCard extends StatelessWidget {
+  final PaymentTransactionModel item;
 
-  const _TransactionCard({required this.item});
+  const _LiveTransactionCard({required this.item});
 
   @override
   Widget build(BuildContext context) {
+    final isDebit = item.type == 'debit';
+    final amountColor = isDebit ? AppColors.error : AppColors.success;
+    final amtStr = isDebit
+        ? '- ₹${item.amount.toStringAsFixed(0)}'
+        : '+ ₹${item.amount.toStringAsFixed(0)}';
+    final icon = isDebit ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded;
+    final diff = DateTime.now().difference(item.createdAt);
+    String dateStr;
+    if (diff.inMinutes < 60) dateStr = '${diff.inMinutes} min ago';
+    else if (diff.inHours < 24) dateStr = '${diff.inHours} hr ago';
+    else dateStr = '${item.createdAt.day}/${item.createdAt.month}/${item.createdAt.year}';
+
     return GlassCard(
       borderRadius: 28,
       padding: const EdgeInsets.all(14),
       child: Row(
         children: [
-          _Sticker(icon: item.icon, color: item.color),
+          _Sticker(icon: icon, color: amountColor),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.title,
+                  item.description ?? item.method,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppColors.text(context),
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: TextStyle(color: AppColors.text(context), fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${item.id} • ${item.date}',
+                  '${item.id} • $dateStr',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: AppColors.subtext(context),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: AppColors.subtext(context), fontWeight: FontWeight.w600, fontSize: 12),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Wrap(
                   spacing: 8,
                   runSpacing: 6,
                   children: [
-                    _MiniPill(label: item.shipmentId, color: item.color),
-                    _MiniPill(
-                      label: '${item.countryFlag} ${item.currency}',
-                      color: AppColors.primary,
-                    ),
-                    _MiniPill(
-                      label: item.status,
-                      color: item.debit ? AppColors.error : AppColors.success,
-                    ),
+                    if (item.shipmentId != null) _MiniPill(label: item.shipmentId!, color: AppColors.primary),
+                    _MiniPill(label: item.status, color: amountColor),
+                    _MiniPill(label: item.method, color: AppColors.oceanColor),
                   ],
                 ),
               ],
             ),
           ),
           const SizedBox(width: 10),
-          Text(
-            item.amount,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: item.debit ? AppColors.error : AppColors.success,
-              fontWeight: FontWeight.w900,
-            ),
+          Text(amtStr, style: TextStyle(color: amountColor, fontWeight: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorRetry extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _ErrorRetry({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      borderRadius: 24,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        children: [
+          Icon(Icons.error_outline_rounded, color: AppColors.error, size: 36),
+          const SizedBox(height: 8),
+          Text(message, style: TextStyle(color: AppColors.subtext(context), fontSize: 13), textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Retry'),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _EmptyTransactions extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      borderRadius: 24,
+      padding: const EdgeInsets.all(24),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(Icons.receipt_long_rounded, color: AppColors.subtext(context), size: 40),
+            const SizedBox(height: 12),
+            Text('No transactions yet', style: TextStyle(color: AppColors.text(context), fontWeight: FontWeight.w700, fontSize: 15)),
+            const SizedBox(height: 4),
+            Text('Add money and make shipment payments to see history here', style: TextStyle(color: AppColors.subtext(context), fontSize: 12), textAlign: TextAlign.center),
+          ],
+        ),
       ),
     );
   }
@@ -1006,32 +1064,3 @@ class _CountryData {
   });
 }
 
-class _WalletTransaction {
-  final String id;
-  final String title;
-  final String amount;
-  final String date;
-  final String shipmentId;
-  final String type;
-  final String status;
-  final String countryFlag;
-  final String currency;
-  final IconData icon;
-  final Color color;
-  final bool debit;
-
-  const _WalletTransaction({
-    required this.id,
-    required this.title,
-    required this.amount,
-    required this.date,
-    required this.shipmentId,
-    required this.type,
-    required this.status,
-    required this.countryFlag,
-    required this.currency,
-    required this.icon,
-    required this.color,
-    required this.debit,
-  });
-}
