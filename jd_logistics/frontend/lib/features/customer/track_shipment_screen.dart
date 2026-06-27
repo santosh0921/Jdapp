@@ -59,6 +59,7 @@ class _TrackShipmentScreenState extends State<TrackShipmentScreen>
   }
 
   Future<void> _trackShipment() async {
+    if (_trackingId.isEmpty) return;
     FocusScope.of(context).unfocus();
     setState(() { _searched = true; _loadingTrack = true; _liveSteps = null; });
 
@@ -128,8 +129,7 @@ class _TrackShipmentScreenState extends State<TrackShipmentScreen>
     return '${dt.day}/${dt.month}/${dt.year}';
   }
 
-  String get _trackingId =>
-      _trackCtrl.text.trim().isEmpty ? 'JDIN240001' : _trackCtrl.text.trim();
+  String get _trackingId => _trackCtrl.text.trim();
 
   @override
   Widget build(BuildContext context) {

@@ -133,7 +133,7 @@ class _ShipmentInsuranceScreenState extends State<ShipmentInsuranceScreen> {
                                       : AppColors.textDark,
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14)),
-                          Text('Mumbai → Delhi · Blue Dart · 5.2 kg',
+                          Text('Shipment details loading…',
                               style: TextStyle(
                                   color: isDark
                                       ? AppColors.darkSubtext
