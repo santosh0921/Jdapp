@@ -7,17 +7,67 @@ import 'package:jd_style_logistics/core/widgets/custom_button.dart';
 import 'package:jd_style_logistics/core/widgets/glass_card.dart';
 import 'package:jd_style_logistics/core/widgets/gradient_background.dart';
 import 'package:jd_style_logistics/core/widgets/logistics_status_chip.dart';
+import 'package:jd_style_logistics/services/courier_service.dart';
 
-class ShipmentDetailsScreen extends StatelessWidget {
+String _s(Map<String, dynamic>? o, List<String> keys, {String fallback = '—'}) {
+  if (o == null) return fallback;
+  for (final k in keys) {
+    final v = o[k];
+    if (v != null && v.toString().isNotEmpty) return v.toString();
+  }
+  return fallback;
+}
+
+String _money(Map<String, dynamic>? o, List<String> keys) {
+  if (o == null) return '—';
+  for (final k in keys) {
+    final v = o[k];
+    if (v != null) {
+      final d = (v is num) ? v.toDouble() : double.tryParse(v.toString());
+      if (d != null) return '₹${d.toStringAsFixed(0)}';
+    }
+  }
+  return '—';
+}
+
+class ShipmentDetailsScreen extends StatefulWidget {
   final String id;
 
   const ShipmentDetailsScreen({
     super.key,
-    this.id = 'JDIN240001',
+    this.id = '',
   });
 
   @override
+  State<ShipmentDetailsScreen> createState() => _ShipmentDetailsScreenState();
+}
+
+class _ShipmentDetailsScreenState extends State<ShipmentDetailsScreen> {
+  bool _loading = true;
+  String? _error;
+  Map<String, dynamic>? _order;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (!mounted) return;
+    setState(() { _loading = true; _error = null; });
+    try {
+      final data = await CourierService.instance.getOrderById(widget.id);
+      if (mounted) setState(() { _order = data; _loading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final displayId = widget.id.isNotEmpty ? widget.id : '—';
+
     return Scaffold(
       backgroundColor: AppColors.background(context),
       appBar: JdAppBar(
@@ -30,69 +80,99 @@ class ShipmentDetailsScreen extends StatelessWidget {
               color: AppColors.text(context),
               size: 20,
             ),
-            onPressed: () => context.push('/shipment/share-tracking?id=$id'),
+            onPressed: () => context.push('/shipment/share-tracking?id=${widget.id}'),
           ),
         ],
       ),
-      body: GradientBackground(
-        child: SafeArea(
-          top: false,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _HeroStatusCard(id: id),
-                const SizedBox(height: 16),
-                const _ProgressCard(),
-                const SizedBox(height: 16),
-                const _SectionTitle('Package Info'),
-                const _PackageInfoCard(),
-                const SizedBox(height: 16),
-                const _SectionTitle('Carrier & Service'),
-                const _CarrierCard(),
-                const SizedBox(height: 16),
-                const _SectionTitle('Addresses'),
-                const _AddressCard(),
-                const SizedBox(height: 16),
-                const _SectionTitle('Payment'),
-                _PaymentCard(id: id),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: PrimaryButton(
-                        label: 'Track Live',
-                        icon: Icons.my_location_rounded,
-                        onPressed: () =>
-                            context.push('/shipment/live-map?id=$id&mode=road'),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+          : _error != null
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline_rounded,
+                          size: 48, color: AppColors.error),
+                      const SizedBox(height: 12),
+                      Text('Failed to load shipment details',
+                          style: TextStyle(
+                              color: AppColors.text(context),
+                              fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      TextButton(onPressed: _load, child: const Text('Retry')),
+                    ],
+                  ),
+                )
+              : GradientBackground(
+                  child: SafeArea(
+                    top: false,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _HeroStatusCard(id: displayId, order: _order),
+                          const SizedBox(height: 16),
+                          _ProgressCard(order: _order),
+                          const SizedBox(height: 16),
+                          const _SectionTitle('Package Info'),
+                          _PackageInfoCard(order: _order),
+                          const SizedBox(height: 16),
+                          const _SectionTitle('Carrier & Service'),
+                          _CarrierCard(order: _order),
+                          const SizedBox(height: 16),
+                          const _SectionTitle('Addresses'),
+                          _AddressCard(order: _order),
+                          const SizedBox(height: 16),
+                          const _SectionTitle('Payment'),
+                          _PaymentCard(id: displayId, order: _order),
+                          const SizedBox(height: 20),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: PrimaryButton(
+                                  label: 'Track Live',
+                                  icon: Icons.my_location_rounded,
+                                  onPressed: () =>
+                                      context.push('/shipment/live-map?id=${widget.id}&mode=road'),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: OutlineButton(
+                                  label: 'Support',
+                                  onPressed: () => context.push('/customer/chat-support'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlineButton(
-                        label: 'Support',
-                        onPressed: () => context.push('/customer/chat-support'),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
 
 class _HeroStatusCard extends StatelessWidget {
   final String id;
+  final Map<String, dynamic>? order;
 
-  const _HeroStatusCard({required this.id});
+  const _HeroStatusCard({required this.id, required this.order});
 
   @override
   Widget build(BuildContext context) {
+    final status = _s(order, ['status'], fallback: 'Pending');
+    final from = _s(order, ['from_city', 'pickup_city', 'pickup_address']);
+    final to = _s(order, ['to_city', 'delivery_city', 'delivery_address']);
+    final mode = _s(order, ['transport_mode', 'mode'], fallback: 'road').toLowerCase();
+    final modeColor = mode.contains('air')
+        ? AppColors.airColor
+        : mode.contains('ocean') || mode.contains('sea')
+            ? AppColors.oceanColor
+            : AppColors.roadColor;
+
     return GlassCard(
       borderRadius: 32,
       padding: const EdgeInsets.all(18),
@@ -100,9 +180,9 @@ class _HeroStatusCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const _Sticker(
+              _Sticker(
                 icon: Icons.local_shipping_rounded,
-                color: AppColors.roadColor,
+                color: modeColor,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -119,42 +199,31 @@ class _HeroStatusCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const LogisticsStatusChip(status: 'In Transit'),
+                    LogisticsStatusChip(status: status),
                   ],
                 ),
               ),
               _SmallAction(
                 label: 'Timeline',
-                onTap: () => context.push('/shipment/timeline?id=$id&mode=road'),
+                onTap: () => context.push('/shipment/timeline?id=$id&mode=$mode'),
               ),
             ],
           ),
           const SizedBox(height: 18),
-          const _RouteBar(
-            from: 'Mumbai',
-            to: 'Delhi',
-            color: AppColors.roadColor,
+          _RouteBar(
+            from: from,
+            to: to,
+            color: modeColor,
           ),
           const SizedBox(height: 14),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: const [
-              _MetaStat(
-                label: 'ETA',
-                value: 'Today 7:30 PM',
-                color: AppColors.success,
-              ),
-              _MDivider(),
-              _MetaStat(
-                label: 'Progress',
-                value: '68%',
-                color: AppColors.roadColor,
-              ),
-              _MDivider(),
-              _MetaStat(
-                label: 'Distance',
-                value: '1,418 km',
-              ),
+            children: [
+              const _MetaStat(label: 'ETA', value: '—', color: AppColors.success),
+              const _MDivider(),
+              _MetaStat(label: 'Progress', value: '—', color: modeColor),
+              const _MDivider(),
+              const _MetaStat(label: 'Distance', value: '—'),
             ],
           ),
         ],
@@ -164,10 +233,14 @@ class _HeroStatusCard extends StatelessWidget {
 }
 
 class _ProgressCard extends StatelessWidget {
-  const _ProgressCard();
+  final Map<String, dynamic>? order;
+  const _ProgressCard({required this.order});
 
   @override
   Widget build(BuildContext context) {
+    final from = _s(order, ['from_city', 'pickup_city', 'pickup_address']);
+    final to = _s(order, ['to_city', 'delivery_city', 'delivery_address']);
+
     return GlassCard(
       borderRadius: 28,
       padding: const EdgeInsets.all(16),
@@ -175,19 +248,19 @@ class _ProgressCard extends StatelessWidget {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(
-              value: 0.68,
+            child: const LinearProgressIndicator(
+              value: 0,
               minHeight: 10,
-              backgroundColor: AppColors.surface(context),
-              valueColor: const AlwaysStoppedAnimation(AppColors.roadColor),
+              backgroundColor: Colors.transparent,
+              valueColor: AlwaysStoppedAnimation(AppColors.roadColor),
             ),
           ),
           const SizedBox(height: 10),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _SmallText('Pickup — Mumbai'),
-              _SmallText('Delivery — Delhi'),
+              _SmallText('Pickup — $from'),
+              _SmallText('Delivery — $to'),
             ],
           ),
         ],
@@ -197,25 +270,32 @@ class _ProgressCard extends StatelessWidget {
 }
 
 class _PackageInfoCard extends StatelessWidget {
-  const _PackageInfoCard();
+  final Map<String, dynamic>? order;
+  const _PackageInfoCard({required this.order});
 
   @override
   Widget build(BuildContext context) {
-    return const GlassCard(
+    final weight = order != null && order!['weight'] != null
+        ? '${order!['weight']} kg'
+        : '—';
+
+    return GlassCard(
       borderRadius: 28,
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          _DetailRow(label: 'Category', value: 'Electronics'),
-          _DetailRow(label: 'Weight', value: '5.2 kg'),
-          _DetailRow(label: 'Dimensions', value: '30 × 20 × 15 cm'),
-          _DetailRow(label: 'Quantity', value: '1 package'),
-          _DetailRow(label: 'Declared Value', value: '₹45,000'),
-          _DetailRow(
-            label: 'Special Handling',
-            value: 'Fragile',
-            valueColor: AppColors.warning,
-          ),
+          _DetailRow(label: 'Category',
+              value: _s(order, ['goods_type', 'category', 'package_type'])),
+          _DetailRow(label: 'Weight', value: weight),
+          _DetailRow(label: 'Dimensions',
+              value: _s(order, ['dimensions', 'package_dimensions'])),
+          _DetailRow(label: 'Quantity',
+              value: _s(order, ['quantity', 'package_count'])),
+          _DetailRow(label: 'Declared Value',
+              value: _money(order, ['declared_value', 'item_value'])),
+          _DetailRow(label: 'Special Handling',
+              value: _s(order, ['special_handling', 'handling_instructions']),
+              valueColor: AppColors.warning),
         ],
       ),
     );
@@ -223,32 +303,8 @@ class _PackageInfoCard extends StatelessWidget {
 }
 
 class _CarrierCard extends StatelessWidget {
-  const _CarrierCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return const GlassCard(
-      borderRadius: 28,
-      padding: EdgeInsets.all(16),
-      child: Column(
-        children: [
-          _DetailRow(label: 'Carrier', value: 'Blue Dart'),
-          _DetailRow(label: 'Service', value: 'Road Freight'),
-          _DetailRow(label: 'Mode', value: 'Full Truck Load'),
-          _DetailRow(
-            label: 'Insurance',
-            value: 'Included ₹50k cover',
-            valueColor: AppColors.success,
-          ),
-          _DetailRow(label: 'AWB / Docket', value: 'BD-994821745'),
-        ],
-      ),
-    );
-  }
-}
-
-class _AddressCard extends StatelessWidget {
-  const _AddressCard();
+  final Map<String, dynamic>? order;
+  const _CarrierCard({required this.order});
 
   @override
   Widget build(BuildContext context) {
@@ -257,11 +313,39 @@ class _AddressCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          const _AddressBlock(
+          _DetailRow(label: 'Carrier',
+              value: _s(order, ['carrier', 'carrier_name', 'partner'])),
+          _DetailRow(label: 'Service',
+              value: _s(order, ['service_type', 'service'])),
+          _DetailRow(label: 'Mode',
+              value: _s(order, ['transport_mode', 'mode'])),
+          _DetailRow(label: 'Insurance',
+              value: _s(order, ['insurance', 'insurance_cover']),
+              valueColor: AppColors.success),
+          _DetailRow(label: 'AWB / Docket',
+              value: _s(order, ['awb', 'docket_number', 'tracking_id'])),
+        ],
+      ),
+    );
+  }
+}
+
+class _AddressCard extends StatelessWidget {
+  final Map<String, dynamic>? order;
+  const _AddressCard({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      borderRadius: 28,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _AddressBlock(
             label: 'Pickup',
-            name: 'Raj Electronics Ltd.',
-            address: '12, Andheri Industrial Area,\nMumbai, MH 400053',
-            phone: '+91 98765 43210',
+            name: _s(order, ['sender_name', 'pickup_contact_name']),
+            address: _s(order, ['pickup_address']),
+            phone: _s(order, ['sender_phone', 'pickup_contact_phone']),
             icon: Icons.circle,
             color: AppColors.roadColor,
           ),
@@ -273,11 +357,11 @@ class _AddressCard extends StatelessWidget {
               color: AppColors.border(context),
             ),
           ),
-          const _AddressBlock(
+          _AddressBlock(
             label: 'Delivery',
-            name: 'TechMart Stores Pvt. Ltd.',
-            address: '45, Connaught Place,\nNew Delhi, DL 110001',
-            phone: '+91 91234 56789',
+            name: _s(order, ['receiver_name', 'delivery_contact_name']),
+            address: _s(order, ['delivery_address']),
+            phone: _s(order, ['receiver_phone', 'delivery_contact_phone']),
             icon: Icons.location_on_rounded,
             color: AppColors.error,
           ),
@@ -289,8 +373,9 @@ class _AddressCard extends StatelessWidget {
 
 class _PaymentCard extends StatelessWidget {
   final String id;
+  final Map<String, dynamic>? order;
 
-  const _PaymentCard({required this.id});
+  const _PaymentCard({required this.id, required this.order});
 
   @override
   Widget build(BuildContext context) {
@@ -299,13 +384,15 @@ class _PaymentCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          const _DetailRow(
+          _DetailRow(
             label: 'Amount Paid',
-            value: '₹1,952',
+            value: _money(order, ['amount', 'total_amount', 'paid_amount']),
             valueColor: AppColors.success,
           ),
-          const _DetailRow(label: 'Payment Method', value: 'UPI GPay'),
-          const _DetailRow(label: 'Transaction ID', value: 'TXN82934710'),
+          _DetailRow(label: 'Payment Method',
+              value: _s(order, ['payment_method', 'payment_mode'])),
+          _DetailRow(label: 'Transaction ID',
+              value: _s(order, ['transaction_id', 'payment_reference', 'reference'])),
           _DetailRow(
             label: 'Invoice',
             value: 'View →',
