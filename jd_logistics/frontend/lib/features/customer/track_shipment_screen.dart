@@ -7,7 +7,6 @@ import 'package:jd_style_logistics/core/widgets/custom_button.dart';
 import 'package:jd_style_logistics/core/widgets/custom_textfield.dart';
 import 'package:jd_style_logistics/core/widgets/glass_card.dart';
 import 'package:jd_style_logistics/core/widgets/gradient_background.dart';
-import 'package:jd_style_logistics/models/shipment_model.dart';
 import 'package:jd_style_logistics/services/tracking_service.dart';
 
 class TrackShipmentScreen extends StatefulWidget {
@@ -30,44 +29,6 @@ class _TrackShipmentScreenState extends State<TrackShipmentScreen>
   bool _loadingTrack = false;
   List<_TrackingStepData>? _liveSteps;
 
-  final _steps = const [
-    _TrackingStepData(
-      title: 'Shipment Booked',
-      subtitle: 'Order created at JD Logistics Mumbai Hub',
-      time: 'Today · 08:10 AM',
-      icon: Icons.inventory_2_rounded,
-      done: true,
-    ),
-    _TrackingStepData(
-      title: 'Picked Up',
-      subtitle: 'Parcel collected from pickup point',
-      time: 'Today · 09:00 AM',
-      icon: Icons.local_shipping_rounded,
-      done: true,
-    ),
-    _TrackingStepData(
-      title: 'Reached Hub',
-      subtitle: 'Arrived at Pune regional sort center',
-      time: 'Today · 02:30 PM',
-      icon: Icons.warehouse_rounded,
-      done: true,
-    ),
-    _TrackingStepData(
-      title: 'Out for Delivery',
-      subtitle: 'Assigned to verified delivery partner',
-      time: 'Expected · 07:30 PM',
-      icon: Icons.delivery_dining_rounded,
-      done: false,
-      active: true,
-    ),
-    _TrackingStepData(
-      title: 'Delivered',
-      subtitle: 'Delivery confirmation pending',
-      time: 'Expected Today',
-      icon: Icons.verified_rounded,
-      done: false,
-    ),
-  ];
 
   @override
   void initState() {
@@ -244,7 +205,25 @@ class _TrackShipmentScreenState extends State<TrackShipmentScreen>
                             if (_searched)
                               _loadingTrack
                                   ? const Center(child: CircularProgressIndicator())
-                                  : _TimelineCard(steps: _liveSteps ?? _steps),
+                                  : _liveSteps == null || _liveSteps!.isEmpty
+                              ? const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 24),
+                                  child: Center(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.search_off_rounded, size: 48, color: Colors.white38),
+                                        SizedBox(height: 12),
+                                        Text('No tracking events found',
+                                            style: TextStyle(color: Colors.white54, fontSize: 14)),
+                                        SizedBox(height: 6),
+                                        Text('Check your tracking ID and try again',
+                                            style: TextStyle(color: Colors.white38, fontSize: 12)),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                              : _TimelineCard(steps: _liveSteps!),
                           ],
                         ),
                       ),
@@ -355,7 +334,7 @@ class _LiveRouteCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Mumbai → Pune Hub → Bengaluru',
+                    'Tracking shipment route',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -394,17 +373,17 @@ class _LiveRouteCard extends StatelessWidget {
                   _RouteMetric(
                     icon: Icons.schedule_rounded,
                     label: 'ETA',
-                    value: 'Today 7:30 PM',
+                    value: '—',
                   ),
                   _RouteMetric(
                     icon: Icons.speed_rounded,
-                    label: 'Speed',
-                    value: 'On Time',
+                    label: 'Status',
+                    value: 'Live',
                   ),
                   _RouteMetric(
                     icon: Icons.warehouse_rounded,
                     label: 'Hub',
-                    value: 'Pune Sort',
+                    value: '—',
                   ),
                 ],
               ),
@@ -451,12 +430,12 @@ class _ShipmentInfoCard extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           _InfoRow(label: 'Tracking ID', value: trackingId),
-          const _InfoRow(label: 'Status', value: 'Out for Delivery'),
-          const _InfoRow(label: 'Origin', value: 'Mumbai'),
-          const _InfoRow(label: 'Destination', value: 'Bengaluru'),
-          const _InfoRow(label: 'Service', value: 'Express Parcel'),
-          const _InfoRow(label: 'Partner', value: 'Delhivery'),
-          const _InfoRow(label: 'Current Hub', value: 'Pune Sort Center'),
+          const _InfoRow(label: 'Status', value: '—'),
+          const _InfoRow(label: 'Origin', value: '—'),
+          const _InfoRow(label: 'Destination', value: '—'),
+          const _InfoRow(label: 'Service', value: '—'),
+          const _InfoRow(label: 'Partner', value: '—'),
+          const _InfoRow(label: 'Current Hub', value: '—'),
           Divider(color: AppColors.border(context), height: 28),
           Row(
             children: [
