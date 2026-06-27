@@ -38,6 +38,7 @@ import 'package:jd_style_logistics/features/customer/shipment_history_screen.dar
 import 'package:jd_style_logistics/features/customer/saved_addresses_screen.dart';
 import 'package:jd_style_logistics/features/customer/share_tracking_screen.dart';
 import 'package:jd_style_logistics/features/customer/live_shipment_map_screen.dart';
+import 'package:jd_style_logistics/features/customer/address_picker_screen.dart';
 import 'package:jd_style_logistics/features/customer/delivery_rating_screen.dart';
 import 'package:jd_style_logistics/features/customer/rebook_shipment_screen.dart';
 import 'package:jd_style_logistics/features/customer/shipment_insurance_screen.dart';
@@ -354,6 +355,18 @@ class AppRouter {
         ),
       ),
       GoRoute(path: '/customer/chat-support', builder: (_, __) => const CustomerChatSupportScreen()),
+      GoRoute(
+        path: '/pick-address',
+        builder: (_, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return AddressPickerScreen(
+            title: state.uri.queryParameters['title'] ?? 'Pick Location',
+            initialAddress: extra?['address'] as String?,
+            initialLat: extra?['lat'] as double?,
+            initialLng: extra?['lng'] as double?,
+          );
+        },
+      ),
 
       // ── Payments (shared) ─────────────────────────────────────────────────
       GoRoute(path: '/payments', builder: (_, __) => const PaymentMethodsScreen()),

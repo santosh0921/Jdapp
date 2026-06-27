@@ -1,12 +1,17 @@
-import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:provider/provider.dart';
 
 import 'package:jd_style_logistics/core/constants/app_colors.dart';
 import 'package:jd_style_logistics/providers/driver_provider.dart';
+import 'package:jd_style_logistics/services/location_service.dart';
+import 'package:jd_style_logistics/services/tracking_service.dart';
 
 class NavigationScreen extends StatefulWidget {
   const NavigationScreen({super.key});
@@ -15,48 +20,192 @@ class NavigationScreen extends StatefulWidget {
   State<NavigationScreen> createState() => _NavigationScreenState();
 }
 
-class _NavigationScreenState extends State<NavigationScreen>
-    with TickerProviderStateMixin {
-  late final AnimationController _routeController;
-  late final AnimationController _pulseController;
+class _NavigationScreenState extends State<NavigationScreen> {
+  // Map
+  GoogleMapController? _mapCtrl;
+  Set<Polyline> _polylines = {};
+  LatLng? _currentPosition;
+  LatLng? _destination;
 
+  // Metrics
+  double _distanceKm = 0;
+  int _etaMinutes = 0;
+
+  // Subscriptions
+  StreamSubscription<Position>? _locationSub;
+  Timer? _updateTimer;
+
+  // Status
+  bool _permissionDenied = false;
+  bool _locationReady = false;
 
   @override
   void initState() {
     super.initState();
-
-    _routeController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 7),
-    )..repeat();
-
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _init());
   }
 
   @override
   void dispose() {
-    _routeController.dispose();
-    _pulseController.dispose();
+    _locationSub?.cancel();
+    _updateTimer?.cancel();
+    _mapCtrl?.dispose();
     super.dispose();
   }
 
-  bool _dark(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark;
+  Future<void> _init() async {
+    final order = context.read<DriverProvider>().activeDelivery;
 
-  Color _bg(BuildContext context) =>
-      _dark(context) ? AppColors.darkBg1 : const Color(0xFFFFFFFF);
+    // 1. Request location permission
+    final granted = await LocationService.instance.requestPermission();
+    if (!mounted) return;
+    if (!granted) {
+      setState(() => _permissionDenied = true);
+      return;
+    }
 
-  Color _surface(BuildContext context) =>
-      _dark(context) ? AppColors.darkCard : const Color(0xFFF8FAFF);
+    // 2. Get current position
+    final pos = await LocationService.instance.getCurrentPosition();
+    if (!mounted) return;
+    if (pos != null) {
+      final ll = LatLng(pos.latitude, pos.longitude);
+      setState(() {
+        _currentPosition = ll;
+        _locationReady = true;
+      });
+    }
 
-  Color _text(BuildContext context) =>
-      _dark(context) ? Colors.white : const Color(0xFF0F172A);
+    // 3. Geocode delivery destination
+    if (order != null && order.deliveryAddress.isNotEmpty) {
+      final locs = await LocationService.instance.geocodeAddress(order.deliveryAddress);
+      if (!mounted) return;
+      if (locs.isNotEmpty) {
+        final dest = LatLng(locs.first.latitude, locs.first.longitude);
+        setState(() => _destination = dest);
+        if (_currentPosition != null) {
+          _fetchRoute(_currentPosition!, dest);
+        }
+      }
+    }
 
-  Color _sub(BuildContext context) =>
-      _dark(context) ? Colors.white70 : const Color(0xFF64748B);
+    // 4. Start position stream
+    _locationSub = LocationService.instance
+        .getPositionStream(distanceFilter: 20)
+        .listen(_onPositionUpdate);
+
+    // 5. Post location to backend every 15 seconds
+    _updateTimer = Timer.periodic(const Duration(seconds: 15), (_) => _postLocation());
+  }
+
+  void _onPositionUpdate(Position pos) {
+    if (!mounted) return;
+    final ll = LatLng(pos.latitude, pos.longitude);
+    setState(() {
+      _currentPosition = ll;
+      _locationReady = true;
+    });
+    _mapCtrl?.animateCamera(CameraUpdate.newLatLng(ll));
+
+    // Recalculate remaining distance & ETA
+    if (_destination != null) {
+      final distM = LocationService.instance.distanceBetween(
+        ll.latitude, ll.longitude,
+        _destination!.latitude, _destination!.longitude,
+      );
+      final distKm = distM / 1000;
+      final avgSpeedKmh = 30.0;
+      final etaMin = ((distKm / avgSpeedKmh) * 60).round();
+      if (mounted) setState(() { _distanceKm = distKm; _etaMinutes = etaMin; });
+    }
+  }
+
+  Future<void> _fetchRoute(LatLng from, LatLng to) async {
+    try {
+      final result = await TrackingService.instance.getRoute(
+        fromLat: from.latitude, fromLng: from.longitude,
+        toLat: to.latitude,   toLng: to.longitude,
+      );
+      final encoded = (result['overview_polyline'] ?? result['polyline'] ??
+          result['encoded_polyline'] ?? result['path']) as String?;
+      if (encoded != null && encoded.isNotEmpty && mounted) {
+        final points = PolylinePoints()
+            .decodePolyline(encoded)
+            .map((p) => LatLng(p.latitude, p.longitude))
+            .toList();
+        setState(() {
+          _polylines = {
+            Polyline(
+              polylineId: const PolylineId('route'),
+              points: points,
+              color: const Color(0xFF0B5FFF),
+              width: 6,
+              startCap: Cap.roundCap,
+              endCap: Cap.roundCap,
+            ),
+          };
+        });
+      }
+    } catch (_) {
+      // Route unavailable — driver still sees current position
+    }
+  }
+
+  Future<void> _postLocation() async {
+    final pos = _currentPosition;
+    if (pos == null) return;
+    final order = context.read<DriverProvider>().activeDelivery;
+    if (order == null) return;
+    await TrackingService.instance.updateDriverLocation(
+      orderId: order.id,
+      lat: pos.latitude,
+      lng: pos.longitude,
+    );
+  }
+
+  void _recenter() {
+    if (_currentPosition != null) {
+      _mapCtrl?.animateCamera(CameraUpdate.newLatLngZoom(_currentPosition!, 15));
+    }
+  }
+
+  bool _dark(BuildContext context) => Theme.of(context).brightness == Brightness.dark;
+  Color _bg(BuildContext context) => _dark(context) ? AppColors.darkBg1 : const Color(0xFFFFFFFF);
+  Color _surface(BuildContext context) => _dark(context) ? AppColors.darkCard : const Color(0xFFF8FAFF);
+  Color _text(BuildContext context) => _dark(context) ? Colors.white : const Color(0xFF0F172A);
+  Color _sub(BuildContext context) => _dark(context) ? Colors.white70 : const Color(0xFF64748B);
+
+  Set<Marker> get _markers {
+    final ms = <Marker>{};
+    if (_currentPosition != null) {
+      ms.add(Marker(
+        markerId: const MarkerId('driver'),
+        position: _currentPosition!,
+        infoWindow: const InfoWindow(title: 'You'),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+      ));
+    }
+    if (_destination != null) {
+      ms.add(Marker(
+        markerId: const MarkerId('destination'),
+        position: _destination!,
+        infoWindow: const InfoWindow(title: 'Delivery'),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+      ));
+    }
+    return ms;
+  }
+
+  String get _etaLabel {
+    if (_etaMinutes <= 0) return '—';
+    final h = _etaMinutes ~/ 60;
+    final m = _etaMinutes % 60;
+    return h > 0 ? '${h}h ${m}m' : '${_etaMinutes}m';
+  }
+
+  String get _distanceLabel {
+    if (_distanceKm <= 0) return '—';
+    return '${_distanceKm.toStringAsFixed(1)} km';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,19 +216,12 @@ class _NavigationScreenState extends State<NavigationScreen>
     final stops = order == null
         ? const <_Stop>[]
         : [
-            _Stop(
-              label: 'Pickup',
-              address: order.pickupAddress.isNotEmpty ? order.pickupAddress : '—',
-              isOrigin: true,
-              completed: true,
-            ),
-            _Stop(
-              label: 'Delivery',
-              address: order.deliveryAddress.isNotEmpty ? order.deliveryAddress : '—',
-              isOrigin: false,
-              completed: false,
-            ),
+            _Stop(label: 'Pickup', address: order.pickupAddress.isNotEmpty ? order.pickupAddress : '—',
+                isOrigin: true, completed: true),
+            _Stop(label: 'Delivery', address: order.deliveryAddress.isNotEmpty ? order.deliveryAddress : '—',
+                isOrigin: false, completed: false),
           ];
+
     return Scaffold(
       backgroundColor: _bg(context),
       body: SafeArea(
@@ -94,12 +236,8 @@ class _NavigationScreenState extends State<NavigationScreen>
                   textColor: _text(context),
                   subTextColor: _sub(context),
                   surfaceColor: _surface(context),
-                  onBack: () {
-                    HapticFeedback.lightImpact();
-                    if (context.canPop()) {
-                      context.pop();
-                    }
-                  },
+                  onBack: () { HapticFeedback.lightImpact(); if (context.canPop()) context.pop(); },
+                  onRecenter: _recenter,
                 ),
                 Expanded(
                   child: SingleChildScrollView(
@@ -108,14 +246,26 @@ class _NavigationScreenState extends State<NavigationScreen>
                     child: Column(
                       children: [
                         _MapCard(
-                          routeController: _routeController,
-                          pulseController: _pulseController,
+                          currentPosition: _currentPosition,
+                          destination: _destination,
+                          polylines: _polylines,
+                          markers: _markers,
+                          permissionDenied: _permissionDenied,
+                          locationReady: _locationReady,
                           surfaceColor: _surface(context),
                           textColor: _text(context),
                           subTextColor: _sub(context),
+                          onMapCreated: (ctrl) {
+                            _mapCtrl = ctrl;
+                            if (_currentPosition != null) {
+                              ctrl.animateCamera(CameraUpdate.newLatLngZoom(_currentPosition!, 15));
+                            }
+                          },
                         ),
                         const SizedBox(height: 14),
                         _TripMetricsGrid(
+                          etaLabel: _etaLabel,
+                          distanceLabel: _distanceLabel,
                           textColor: _text(context),
                           subTextColor: _sub(context),
                           surfaceColor: _surface(context),
@@ -158,21 +308,143 @@ class _NavigationScreenState extends State<NavigationScreen>
   }
 }
 
-class _Header extends StatelessWidget {
-  final String title;
-  final String subtitle;
+// ── Map card ─────────────────────────────────────────────────────────────────
+
+class _MapCard extends StatelessWidget {
+  final LatLng? currentPosition;
+  final LatLng? destination;
+  final Set<Polyline> polylines;
+  final Set<Marker> markers;
+  final bool permissionDenied;
+  final bool locationReady;
+  final Color surfaceColor;
   final Color textColor;
   final Color subTextColor;
-  final Color surfaceColor;
-  final VoidCallback onBack;
+  final void Function(GoogleMapController) onMapCreated;
 
-  const _Header({
-    required this.title,
-    required this.subtitle,
+  const _MapCard({
+    required this.currentPosition,
+    required this.destination,
+    required this.polylines,
+    required this.markers,
+    required this.permissionDenied,
+    required this.locationReady,
+    required this.surfaceColor,
     required this.textColor,
     required this.subTextColor,
-    required this.surfaceColor,
-    required this.onBack,
+    required this.onMapCreated,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final height = MediaQuery.of(context).size.height * 0.42;
+    final h = height.clamp(300.0, 420.0);
+
+    return _ClayCard(
+      surfaceColor: surfaceColor,
+      padding: const EdgeInsets.all(10),
+      child: SizedBox(
+        height: h,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(26),
+          child: permissionDenied
+              ? _PermissionDeniedPlaceholder(surfaceColor: surfaceColor, textColor: textColor)
+              : !locationReady
+                  ? Center(
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        const CircularProgressIndicator(color: Color(0xFF0B5FFF)),
+                        const SizedBox(height: 12),
+                        Text('Getting your location…',
+                            style: TextStyle(color: textColor, fontSize: 13,
+                                fontWeight: FontWeight.w600)),
+                      ]),
+                    )
+                  : Stack(
+                      children: [
+                        GoogleMap(
+                          initialCameraPosition: CameraPosition(
+                            target: currentPosition ?? const LatLng(20.5937, 78.9629),
+                            zoom: 15,
+                          ),
+                          onMapCreated: onMapCreated,
+                          markers: markers,
+                          polylines: polylines,
+                          myLocationEnabled: true,
+                          myLocationButtonEnabled: false,
+                          zoomControlsEnabled: false,
+                          mapToolbarEnabled: false,
+                          mapType: MapType.normal,
+                        ),
+                        // ETA chip
+                        Positioned(
+                          top: 12,
+                          left: 12,
+                          child: _MapInfoChip(
+                            title: currentPosition != null && destination != null
+                                ? '${((LocationService.instance.distanceBetween(
+                                    currentPosition!.latitude, currentPosition!.longitude,
+                                    destination!.latitude, destination!.longitude,
+                                  ) / 1000 / 30) * 60).round()} min'
+                                : '—',
+                            subtitle: 'ETA',
+                            icon: Icons.timer_rounded,
+                            color: const Color(0xFF0B5FFF),
+                          ),
+                        ),
+                        const Positioned(
+                          top: 12,
+                          right: 12,
+                          child: _MapInfoChip(
+                            title: 'Live',
+                            subtitle: 'GPS Active',
+                            icon: Icons.gps_fixed_rounded,
+                            color: Color(0xFF22C55E),
+                          ),
+                        ),
+                      ],
+                    ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PermissionDeniedPlaceholder extends StatelessWidget {
+  final Color surfaceColor, textColor;
+  const _PermissionDeniedPlaceholder({required this.surfaceColor, required this.textColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: surfaceColor,
+      child: Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.location_off_rounded, color: AppColors.error, size: 48),
+          const SizedBox(height: 12),
+          Text('Location permission denied', style: TextStyle(color: textColor,
+              fontWeight: FontWeight.w800, fontSize: 15)),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => LocationService.instance.openAppSettings(),
+            child: const Text('Open Settings'),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ── Header ────────────────────────────────────────────────────────────────────
+
+class _Header extends StatelessWidget {
+  final String title, subtitle;
+  final Color textColor, subTextColor, surfaceColor;
+  final VoidCallback onBack, onRecenter;
+
+  const _Header({
+    required this.title, required this.subtitle,
+    required this.textColor, required this.subTextColor,
+    required this.surfaceColor, required this.onBack, required this.onRecenter,
   });
 
   @override
@@ -181,555 +453,90 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
       child: Row(
         children: [
-          _ClayButton(
-            icon: Icons.arrow_back_rounded,
-            color: const Color(0xFF0B5FFF),
-            surfaceColor: surfaceColor,
-            onTap: onBack,
-          ),
+          _ClayButton(icon: Icons.arrow_back_rounded, color: const Color(0xFF0B5FFF),
+              surfaceColor: surfaceColor, onTap: onBack),
           const SizedBox(width: 12),
           Expanded(
             child: FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: subTextColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 23,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
-              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(subtitle, style: TextStyle(color: subTextColor, fontSize: 12,
+                    fontWeight: FontWeight.w700)),
+                Text(title, style: TextStyle(color: textColor, fontSize: 23,
+                    fontWeight: FontWeight.w900)),
+              ]),
             ),
           ),
           const SizedBox(width: 10),
-          _ClayButton(
-            icon: Icons.my_location_rounded,
-            color: AppColors.success,
-            surfaceColor: surfaceColor,
-            onTap: () => HapticFeedback.lightImpact(),
-          ),
+          _ClayButton(icon: Icons.my_location_rounded, color: AppColors.success,
+              surfaceColor: surfaceColor, onTap: onRecenter),
         ],
       ),
     );
   }
 }
 
-class _MapCard extends StatelessWidget {
-  final AnimationController routeController;
-  final AnimationController pulseController;
-  final Color surfaceColor;
-  final Color textColor;
-  final Color subTextColor;
-
-  const _MapCard({
-    required this.routeController,
-    required this.pulseController,
-    required this.surfaceColor,
-    required this.textColor,
-    required this.subTextColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final height = math.max(300.0, MediaQuery.of(context).size.height * 0.42);
-
-    return _ClayCard(
-      surfaceColor: surfaceColor,
-      padding: const EdgeInsets.all(10),
-      child: SizedBox(
-        height: height.clamp(300.0, 420.0),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(26),
-          child: AnimatedBuilder(
-            animation: Listenable.merge([routeController, pulseController]),
-            builder: (context, _) {
-              return CustomPaint(
-                painter: _PremiumMapPainter(
-                  routeProgress: routeController.value,
-                  pulse: pulseController.value,
-                  dark: Theme.of(context).brightness == Brightness.dark,
-                ),
-                child: Stack(
-                  children: [
-                    const Positioned(
-                      top: 12,
-                      left: 12,
-                      child: _MapInfoChip(
-                        title: '18 min',
-                        subtitle: '12.4 km left',
-                        icon: Icons.timer_rounded,
-                        color: Color(0xFF0B5FFF),
-                      ),
-                    ),
-                    const Positioned(
-                      top: 12,
-                      right: 12,
-                      child: _MapInfoChip(
-                        title: 'Light',
-                        subtitle: 'Traffic',
-                        icon: Icons.traffic_rounded,
-                        color: Color(0xFF22C55E),
-                      ),
-                    ),
-                    Positioned(
-                      left: 24 + (routeController.value * 210),
-                      top: 136 +
-                          math.sin(routeController.value * math.pi * 2) * 44,
-                      child: _MovingTruck(pulse: pulseController.value),
-                    ),
-                    const Positioned(
-                      right: 48,
-                      bottom: 78,
-                      child: _DestinationPin(),
-                    ),
-                    Positioned(
-                      left: 12,
-                      right: 12,
-                      bottom: 12,
-                      child: _MapBottomPanel(
-                        textColor: textColor,
-                        subTextColor: subTextColor,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PremiumMapPainter extends CustomPainter {
-  final double routeProgress;
-  final double pulse;
-  final bool dark;
-
-  const _PremiumMapPainter({
-    required this.routeProgress,
-    required this.pulse,
-    required this.dark,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final bgPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: dark
-            ? [const Color(0xFF172033), const Color(0xFF101820)]
-            : [const Color(0xFFEAF6FF), const Color(0xFFF8FAFF)],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
-
-    final gridPaint = Paint()
-      ..color = const Color(0xFF0B5FFF).withValues(alpha: dark ? 0.08 : 0.10)
-      ..strokeWidth = 1;
-
-    for (double x = 24; x < size.width; x += 42) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-    }
-
-    for (double y = 24; y < size.height; y += 42) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    final roadPaint = Paint()
-      ..color = dark
-          ? Colors.white.withValues(alpha: 0.08)
-          : const Color(0xFFBFD8FF).withValues(alpha: 0.72)
-      ..strokeWidth = 14
-      ..strokeCap = StrokeCap.round;
-
-    final roads = [
-      Path()
-        ..moveTo(-20, size.height * .30)
-        ..cubicTo(size.width * .26, size.height * .22, size.width * .56,
-            size.height * .44, size.width + 20, size.height * .30),
-      Path()
-        ..moveTo(size.width * .18, -20)
-        ..cubicTo(size.width * .24, size.height * .35, size.width * .16,
-            size.height * .64, size.width * .30, size.height + 20),
-      Path()
-        ..moveTo(size.width + 20, size.height * .74)
-        ..cubicTo(size.width * .68, size.height * .64, size.width * .44,
-            size.height * .88, -20, size.height * .74),
-    ];
-
-    for (final path in roads) {
-      canvas.drawPath(path, roadPaint);
-    }
-
-    final blockPaint = Paint()
-      ..color = dark
-          ? Colors.white.withValues(alpha: 0.04)
-          : Colors.white.withValues(alpha: 0.72);
-
-    final blocks = [
-      const Rect.fromLTWH(24, 70, 74, 48),
-      Rect.fromLTWH(size.width - 118, 82, 78, 52),
-      Rect.fromLTWH(32, size.height - 145, 92, 54),
-      Rect.fromLTWH(size.width - 150, size.height - 156, 100, 60),
-      Rect.fromLTWH(size.width * .38, size.height * .18, 88, 58),
-      Rect.fromLTWH(size.width * .46, size.height * .62, 96, 56),
-    ];
-
-    for (final block in blocks) {
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(block, const Radius.circular(14)),
-        blockPaint,
-      );
-    }
-
-    final start = Offset(size.width * .18, size.height * .54);
-    final end = Offset(size.width * .78, size.height * .42);
-    final c1 = Offset(size.width * .34, size.height * .20);
-    final c2 = Offset(size.width * .58, size.height * .74);
-
-    final route = Path()
-      ..moveTo(start.dx, start.dy)
-      ..cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, end.dx, end.dy);
-
-    canvas.drawPath(
-      route,
-      Paint()
-        ..color = const Color(0xFF0B5FFF).withValues(alpha: 0.13 + pulse * .07)
-        ..strokeWidth = 22
-        ..strokeCap = StrokeCap.round
-        ..style = PaintingStyle.stroke,
-    );
-
-    canvas.drawPath(
-      route,
-      Paint()
-        ..color = const Color(0xFF0B5FFF).withValues(alpha: .34)
-        ..strokeWidth = 7
-        ..strokeCap = StrokeCap.round
-        ..style = PaintingStyle.stroke,
-    );
-
-    final metric = route.computeMetrics().first;
-    final active = metric.extractPath(0, metric.length * routeProgress);
-
-    canvas.drawPath(
-      active,
-      Paint()
-        ..color = const Color(0xFFFF8A00)
-        ..strokeWidth = 7
-        ..strokeCap = StrokeCap.round
-        ..style = PaintingStyle.stroke,
-    );
-
-    final startPin = Paint()..color = const Color(0xFF22C55E);
-    canvas.drawCircle(start, 9, startPin);
-    canvas.drawCircle(start, 16, startPin..color = const Color(0xFF22C55E).withValues(alpha: .18));
-  }
-
-  @override
-  bool shouldRepaint(covariant _PremiumMapPainter oldDelegate) {
-    return oldDelegate.routeProgress != routeProgress ||
-        oldDelegate.pulse != pulse ||
-        oldDelegate.dark != dark;
-  }
-}
-
-class _MapInfoChip extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color color;
-
-  const _MapInfoChip({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 116),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withValues(alpha: 0.20)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 17),
-          const SizedBox(width: 7),
-          Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Color(0xFF0F172A),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: Color(0xFF64748B),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MovingTruck extends StatelessWidget {
-  final double pulse;
-
-  const _MovingTruck({required this.pulse});
-
-  @override
-  Widget build(BuildContext context) {
-    return Transform.scale(
-      scale: 1 + pulse * .04,
-      child: Container(
-        height: 42,
-        width: 42,
-        decoration: BoxDecoration(
-          color: const Color(0xFF0B5FFF),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF0B5FFF).withValues(alpha: .25),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: const Icon(
-          Icons.local_shipping_rounded,
-          color: Colors.white,
-          size: 24,
-        ),
-      ),
-    );
-  }
-}
-
-class _DestinationPin extends StatelessWidget {
-  const _DestinationPin();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          height: 40,
-          width: 40,
-          decoration: BoxDecoration(
-            color: AppColors.error,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: const Icon(
-            Icons.location_on_rounded,
-            color: Colors.white,
-            size: 24,
-          ),
-        ),
-        Container(
-          width: 4,
-          height: 12,
-          decoration: BoxDecoration(
-            color: AppColors.error,
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _MapBottomPanel extends StatelessWidget {
-  final Color textColor;
-  final Color subTextColor;
-
-  const _MapBottomPanel({
-    required this.textColor,
-    required this.subTextColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .94),
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Row(
-        children: [
-          Container(
-            height: 42,
-            width: 42,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFF8A00).withValues(alpha: .13),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: const Icon(
-              Icons.wb_sunny_rounded,
-              color: Color(0xFFFF8A00),
-              size: 23,
-            ),
-          ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Clear Sky • 31°C',
-                    style: TextStyle(
-                      color: Color(0xFF0F172A),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    'Good driving conditions',
-                    style: TextStyle(
-                      color: Color(0xFF64748B),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          const _PercentBadge(value: '72%'),
-        ],
-      ),
-    );
-  }
-}
+// ── Trip metrics ──────────────────────────────────────────────────────────────
 
 class _TripMetricsGrid extends StatelessWidget {
-  final Color textColor;
-  final Color subTextColor;
-  final Color surfaceColor;
+  final String etaLabel, distanceLabel;
+  final Color textColor, subTextColor, surfaceColor;
 
   const _TripMetricsGrid({
-    required this.textColor,
-    required this.subTextColor,
-    required this.surfaceColor,
+    required this.etaLabel, required this.distanceLabel,
+    required this.textColor, required this.subTextColor, required this.surfaceColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final width = (MediaQuery.of(context).size.width - 40) / 2;
-
     final items = [
-      _MetricData('ETA', '18 min', Icons.timer_rounded, const Color(0xFF0B5FFF)),
-      _MetricData('Distance', '12.4 km', Icons.route_rounded, AppColors.success),
-      _MetricData('OBC Reward', '+15', Icons.monetization_on_rounded, const Color(0xFFFF8A00)),
-      _MetricData('Score', '96%', Icons.speed_rounded, AppColors.warning),
+      _MetricData('ETA', etaLabel, Icons.timer_rounded, const Color(0xFF0B5FFF)),
+      _MetricData('Distance', distanceLabel, Icons.route_rounded, AppColors.success),
+      const _MetricData('OBC Reward', '+15', Icons.monetization_on_rounded, Color(0xFFFF8A00)),
+      const _MetricData('Score', '96%', Icons.speed_rounded, AppColors.warning),
     ];
 
     return Wrap(
       spacing: 12,
       runSpacing: 12,
-      children: items
-          .map(
-            (item) => SizedBox(
-              width: width,
-              child: _ClayCard(
-                surfaceColor: surfaceColor,
-                padding: const EdgeInsets.all(13),
-                child: Row(
-                  children: [
-                    _SoftIcon(icon: item.icon, color: item.color),
-                    const SizedBox(width: 9),
-                    Expanded(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.value,
-                              style: TextStyle(
-                                color: textColor,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            Text(
-                              item.label,
-                              style: TextStyle(
-                                color: subTextColor,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+      children: items.map((item) => SizedBox(
+        width: width,
+        child: _ClayCard(
+          surfaceColor: surfaceColor,
+          padding: const EdgeInsets.all(13),
+          child: Row(children: [
+            _SoftIcon(icon: item.icon, color: item.color),
+            const SizedBox(width: 9),
+            Expanded(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(item.value,
+                      style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.w900)),
+                  Text(item.label,
+                      style: TextStyle(color: subTextColor, fontSize: 11, fontWeight: FontWeight.w700)),
+                ]),
               ),
             ),
-          )
-          .toList(),
+          ]),
+        ),
+      )).toList(),
     );
   }
 }
 
+// ── Delivery progress ─────────────────────────────────────────────────────────
+
 class _DeliveryProgressCard extends StatelessWidget {
   final List<_Stop> stops;
-  final Color textColor;
-  final Color subTextColor;
-  final Color surfaceColor;
+  final Color textColor, subTextColor, surfaceColor;
 
   const _DeliveryProgressCard({
-    required this.stops,
-    required this.textColor,
-    required this.subTextColor,
-    required this.surfaceColor,
+    required this.stops, required this.textColor,
+    required this.subTextColor, required this.surfaceColor,
   });
 
   @override
@@ -737,130 +544,80 @@ class _DeliveryProgressCard extends StatelessWidget {
     return _ClayCard(
       surfaceColor: surfaceColor,
       padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          _CardTitle(
-            title: 'Delivery Progress',
-            trailing: '72% Complete',
-            textColor: textColor,
-            subTextColor: subTextColor,
+      child: Column(children: [
+        _CardTitle(title: 'Delivery Progress', trailing: '72% Complete',
+            textColor: textColor, subTextColor: subTextColor),
+        const SizedBox(height: 14),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(999),
+          child: const LinearProgressIndicator(
+            value: .72,
+            minHeight: 9,
+            backgroundColor: Color(0xFF0B5FFF),
+            valueColor: AlwaysStoppedAnimation(Color(0xFFFF8A00)),
           ),
-          const SizedBox(height: 14),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: .72,
-              minHeight: 9,
-              backgroundColor: const Color(0xFF0B5FFF).withValues(alpha: .10),
-              valueColor: const AlwaysStoppedAnimation(Color(0xFFFF8A00)),
-            ),
-          ),
-          const SizedBox(height: 16),
-          ...List.generate(stops.length, (index) {
-            final stop = stops[index];
-            return Column(
-              children: [
-                _StopRow(
-                  stop: stop,
-                  textColor: textColor,
-                  subTextColor: subTextColor,
+        ),
+        const SizedBox(height: 16),
+        ...List.generate(stops.length, (i) {
+          final stop = stops[i];
+          return Column(children: [
+            _StopRow(stop: stop, textColor: textColor, subTextColor: subTextColor),
+            if (i != stops.length - 1)
+              Padding(
+                padding: const EdgeInsets.only(left: 12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(width: 2, height: 20,
+                      color: const Color(0xFF0B5FFF).withValues(alpha: .18)),
                 ),
-                if (index != stops.length - 1)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 12),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        width: 2,
-                        height: 20,
-                        color: const Color(0xFF0B5FFF).withValues(alpha: .18),
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          }),
-        ],
-      ),
+              ),
+          ]);
+        }),
+      ]),
     );
   }
 }
 
 class _StopRow extends StatelessWidget {
   final _Stop stop;
-  final Color textColor;
-  final Color subTextColor;
+  final Color textColor, subTextColor;
 
-  const _StopRow({
-    required this.stop,
-    required this.textColor,
-    required this.subTextColor,
-  });
+  const _StopRow({required this.stop, required this.textColor, required this.subTextColor});
 
   @override
   Widget build(BuildContext context) {
     final color = stop.completed
         ? AppColors.success
-        : stop.isOrigin
-            ? const Color(0xFF0B5FFF)
-            : AppColors.warning;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          stop.completed
-              ? Icons.check_circle_rounded
-              : stop.isOrigin
-                  ? Icons.circle
-                  : Icons.location_on_rounded,
-          color: color,
-          size: 24,
+        : stop.isOrigin ? const Color(0xFF0B5FFF) : AppColors.warning;
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Icon(
+        stop.completed ? Icons.check_circle_rounded : stop.isOrigin ? Icons.circle : Icons.location_on_rounded,
+        color: color, size: 24,
+      ),
+      const SizedBox(width: 12),
+      Expanded(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(stop.label, style: TextStyle(color: textColor, fontSize: 14, fontWeight: FontWeight.w900)),
+            Text(stop.address, style: TextStyle(color: subTextColor, fontSize: 11, fontWeight: FontWeight.w600)),
+          ]),
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  stop.label,
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Text(
-                  stop.address,
-                  style: TextStyle(
-                    color: subTextColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
+      ),
+    ]);
   }
 }
 
+// ── Customer card ─────────────────────────────────────────────────────────────
+
 class _CustomerCard extends StatelessWidget {
   final double amount;
-  final Color textColor;
-  final Color subTextColor;
-  final Color surfaceColor;
+  final Color textColor, subTextColor, surfaceColor;
 
   const _CustomerCard({
-    required this.amount,
-    required this.textColor,
-    required this.subTextColor,
-    required this.surfaceColor,
+    required this.amount, required this.textColor,
+    required this.subTextColor, required this.surfaceColor,
   });
 
   @override
@@ -869,121 +626,68 @@ class _CustomerCard extends StatelessWidget {
     return _ClayCard(
       surfaceColor: surfaceColor,
       padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          _CardTitle(
-            title: 'Customer',
-            trailing: amtLabel,
-            textColor: textColor,
-            subTextColor: subTextColor,
+      child: Column(children: [
+        _CardTitle(title: 'Customer', trailing: amtLabel,
+            textColor: textColor, subTextColor: subTextColor),
+        const SizedBox(height: 14),
+        Row(children: [
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: const Color(0xFF0B5FFF).withValues(alpha: .12),
+            child: const Icon(Icons.person_rounded, color: Color(0xFF0B5FFF), size: 26),
           ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: const Color(0xFF0B5FFF).withValues(alpha: .12),
-                child: const Icon(Icons.person_rounded,
-                    color: Color(0xFF0B5FFF), size: 26),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Customer',
-                        style: TextStyle(
-                          color: textColor,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      Text(
-                        'Contact via app',
-                        style: TextStyle(
-                          color: subTextColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _RoundAction(
-                icon: Icons.call_rounded,
-                color: AppColors.success,
-                onTap: () => HapticFeedback.mediumImpact(),
-              ),
-              const SizedBox(width: 8),
-              _RoundAction(
-                icon: Icons.chat_bubble_rounded,
-                color: const Color(0xFF0B5FFF),
-                onTap: () => HapticFeedback.lightImpact(),
-              ),
-            ],
+          const SizedBox(width: 12),
+          Expanded(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Customer', style: TextStyle(color: textColor, fontSize: 15, fontWeight: FontWeight.w900)),
+                Text('Contact via app', style: TextStyle(color: subTextColor, fontSize: 12, fontWeight: FontWeight.w600)),
+              ]),
+            ),
           ),
-        ],
-      ),
+          const SizedBox(width: 8),
+          _RoundAction(icon: Icons.call_rounded, color: AppColors.success,
+              onTap: () => HapticFeedback.mediumImpact()),
+          const SizedBox(width: 8),
+          _RoundAction(icon: Icons.chat_bubble_rounded, color: const Color(0xFF0B5FFF),
+              onTap: () => HapticFeedback.lightImpact()),
+        ]),
+      ]),
     );
   }
 }
 
-class _ObcRewardCard extends StatelessWidget {
-  final Color textColor;
-  final Color subTextColor;
-  final Color surfaceColor;
+// ── OBC reward card ───────────────────────────────────────────────────────────
 
-  const _ObcRewardCard({
-    required this.textColor,
-    required this.subTextColor,
-    required this.surfaceColor,
-  });
+class _ObcRewardCard extends StatelessWidget {
+  final Color textColor, subTextColor, surfaceColor;
+  const _ObcRewardCard({required this.textColor, required this.subTextColor, required this.surfaceColor});
 
   @override
   Widget build(BuildContext context) {
     return _ClayCard(
       surfaceColor: surfaceColor,
       padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          _CardTitle(
-            title: 'One Bharat Coin',
-            trailing: 'Driver Rewards',
-            textColor: textColor,
-            subTextColor: subTextColor,
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _RewardMini(label: 'Trip', value: '+15 OBC', color: const Color(0xFFFF8A00)),
-              _RewardMini(label: 'Weekly', value: '+120 OBC', color: const Color(0xFF0B5FFF)),
-              _RewardMini(label: 'Monthly', value: '+480 OBC', color: AppColors.success),
-            ],
-          ),
-        ],
-      ),
+      child: Column(children: [
+        _CardTitle(title: 'One Bharat Coin', trailing: 'Driver Rewards',
+            textColor: textColor, subTextColor: subTextColor),
+        const SizedBox(height: 14),
+        Wrap(spacing: 10, runSpacing: 10, children: [
+          _RewardMini(label: 'Trip',    value: '+15 OBC',  color: const Color(0xFFFF8A00)),
+          _RewardMini(label: 'Weekly',  value: '+120 OBC', color: const Color(0xFF0B5FFF)),
+          _RewardMini(label: 'Monthly', value: '+480 OBC', color: AppColors.success),
+        ]),
+      ]),
     );
   }
 }
 
 class _RewardMini extends StatelessWidget {
-  final String label;
-  final String value;
+  final String label, value;
   final Color color;
-
-  const _RewardMini({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
+  const _RewardMini({required this.label, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -998,76 +702,39 @@ class _RewardMini extends StatelessWidget {
       ),
       child: FittedBox(
         fit: BoxFit.scaleDown,
-        child: Column(
-          children: [
-            Text(
-              value,
-              style: TextStyle(
-                color: color,
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            Text(
-              label,
-              style: TextStyle(
-                color: color.withValues(alpha: .75),
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
+        child: Column(children: [
+          Text(value, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w900)),
+          Text(label, style: TextStyle(color: color.withValues(alpha: .75), fontSize: 11, fontWeight: FontWeight.w800)),
+        ]),
       ),
     );
   }
 }
 
-class _BottomActions extends StatelessWidget {
-  final Color surfaceColor;
-  final Color textColor;
+// ── Bottom actions ────────────────────────────────────────────────────────────
 
-  const _BottomActions({
-    required this.surfaceColor,
-    required this.textColor,
-  });
+class _BottomActions extends StatelessWidget {
+  final Color surfaceColor, textColor;
+  const _BottomActions({required this.surfaceColor, required this.textColor});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _ActionButton(
-            label: 'Emergency',
-            icon: Icons.sos_rounded,
-            color: AppColors.error,
-            filled: false,
-            onTap: () => HapticFeedback.heavyImpact(),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _ActionButton(
-            label: 'Proof',
-            icon: Icons.fact_check_rounded,
-            color: AppColors.warning,
-            filled: false,
-            onTap: () => HapticFeedback.lightImpact(),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          flex: 2,
-          child: _ActionButton(
-            label: 'Start Navigation',
-            icon: Icons.navigation_rounded,
-            color: const Color(0xFF0B5FFF),
-            filled: true,
-            onTap: () => HapticFeedback.mediumImpact(),
-          ),
-        ),
-      ],
-    );
+    return Row(children: [
+      Expanded(child: _ActionButton(label: 'Emergency', icon: Icons.sos_rounded,
+          color: AppColors.error, filled: false,
+          onTap: () => HapticFeedback.heavyImpact())),
+      const SizedBox(width: 10),
+      Expanded(child: _ActionButton(label: 'Proof', icon: Icons.fact_check_rounded,
+          color: AppColors.warning, filled: false,
+          onTap: () => HapticFeedback.lightImpact())),
+      const SizedBox(width: 10),
+      Expanded(
+        flex: 2,
+        child: _ActionButton(label: 'Navigation', icon: Icons.navigation_rounded,
+            color: const Color(0xFF0B5FFF), filled: true,
+            onTap: () => HapticFeedback.mediumImpact()),
+      ),
+    ]);
   }
 }
 
@@ -1079,11 +746,8 @@ class _ActionButton extends StatelessWidget {
   final VoidCallback onTap;
 
   const _ActionButton({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.filled,
-    required this.onTap,
+    required this.label, required this.icon, required this.color,
+    required this.filled, required this.onTap,
   });
 
   @override
@@ -1098,21 +762,13 @@ class _ActionButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
           child: FittedBox(
             fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: filled ? Colors.white : color, size: 20),
-                const SizedBox(width: 7),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: filled ? Colors.white : color,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(icon, color: filled ? Colors.white : color, size: 20),
+              const SizedBox(width: 7),
+              Text(label,
+                  style: TextStyle(color: filled ? Colors.white : color,
+                      fontSize: 13, fontWeight: FontWeight.w900)),
+            ]),
           ),
         ),
       ),
@@ -1120,21 +776,19 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
+// ── Shared sub-widgets ────────────────────────────────────────────────────────
+
 class _ClayCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final Color surfaceColor;
 
-  const _ClayCard({
-    required this.child,
-    required this.surfaceColor,
-    this.padding = const EdgeInsets.all(16),
-  });
+  const _ClayCard({required this.child, required this.surfaceColor,
+      this.padding = const EdgeInsets.all(16)});
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-
     return Container(
       width: double.infinity,
       padding: padding,
@@ -1142,21 +796,12 @@ class _ClayCard extends StatelessWidget {
         color: surfaceColor,
         borderRadius: BorderRadius.circular(28),
         border: Border.all(
-          color: dark
-              ? Colors.white.withValues(alpha: .05)
-              : const Color(0xFFDFEAFF),
-        ),
+            color: dark ? Colors.white.withValues(alpha: .05) : const Color(0xFFDFEAFF)),
         boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: dark ? .24 : .075),
-            blurRadius: 22,
-            offset: const Offset(10, 12),
-          ),
-          BoxShadow(
-            color: Colors.white.withValues(alpha: dark ? .03 : .92),
-            blurRadius: 18,
-            offset: const Offset(-8, -8),
-          ),
+          BoxShadow(color: Colors.black.withValues(alpha: dark ? .24 : .075),
+              blurRadius: 22, offset: const Offset(10, 12)),
+          BoxShadow(color: Colors.white.withValues(alpha: dark ? .03 : .92),
+              blurRadius: 18, offset: const Offset(-8, -8)),
         ],
       ),
       child: child,
@@ -1166,15 +811,12 @@ class _ClayCard extends StatelessWidget {
 
 class _ClayButton extends StatelessWidget {
   final IconData icon;
-  final Color color;
-  final Color surfaceColor;
+  final Color color, surfaceColor;
   final VoidCallback onTap;
 
   const _ClayButton({
-    required this.icon,
-    required this.color,
-    required this.surfaceColor,
-    required this.onTap,
+    required this.icon, required this.color,
+    required this.surfaceColor, required this.onTap,
   });
 
   @override
@@ -1186,8 +828,7 @@ class _ClayButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(17),
         onTap: onTap,
         child: Container(
-          height: 44,
-          width: 44,
+          height: 44, width: 44,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(17),
             border: Border.all(color: color.withValues(alpha: .14)),
@@ -1202,21 +843,14 @@ class _ClayButton extends StatelessWidget {
 class _SoftIcon extends StatelessWidget {
   final IconData icon;
   final Color color;
-
-  const _SoftIcon({
-    required this.icon,
-    required this.color,
-  });
+  const _SoftIcon({required this.icon, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 42,
-      width: 42,
+      height: 42, width: 42,
       decoration: BoxDecoration(
-        color: color.withValues(alpha: .12),
-        borderRadius: BorderRadius.circular(15),
-      ),
+          color: color.withValues(alpha: .12), borderRadius: BorderRadius.circular(15)),
       child: Icon(icon, color: color, size: 22),
     );
   }
@@ -1226,12 +860,7 @@ class _RoundAction extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
-
-  const _RoundAction({
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
+  const _RoundAction({required this.icon, required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1241,77 +870,62 @@ class _RoundAction extends StatelessWidget {
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
-        child: SizedBox(
-          height: 42,
-          width: 42,
-          child: Icon(icon, color: color, size: 20),
-        ),
+        child: SizedBox(height: 42, width: 42, child: Icon(icon, color: color, size: 20)),
       ),
     );
   }
 }
 
 class _CardTitle extends StatelessWidget {
-  final String title;
-  final String trailing;
-  final Color textColor;
-  final Color subTextColor;
-
-  const _CardTitle({
-    required this.title,
-    required this.trailing,
-    required this.textColor,
-    required this.subTextColor,
-  });
+  final String title, trailing;
+  final Color textColor, subTextColor;
+  const _CardTitle({required this.title, required this.trailing,
+      required this.textColor, required this.subTextColor});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: TextStyle(
-              color: textColor,
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-        Text(
-          trailing,
-          style: TextStyle(
-            color: subTextColor,
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
-    );
+    return Row(children: [
+      Expanded(child: Text(title,
+          style: TextStyle(color: textColor, fontSize: 17, fontWeight: FontWeight.w900))),
+      Text(trailing,
+          style: TextStyle(color: subTextColor, fontSize: 11, fontWeight: FontWeight.w800)),
+    ]);
   }
 }
 
-class _PercentBadge extends StatelessWidget {
-  final String value;
-
-  const _PercentBadge({required this.value});
+class _MapInfoChip extends StatelessWidget {
+  final String title, subtitle;
+  final IconData icon;
+  final Color color;
+  const _MapInfoChip({required this.title, required this.subtitle,
+      required this.icon, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      constraints: const BoxConstraints(maxWidth: 116),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
-        color: const Color(0xFFFF8A00).withValues(alpha: .14),
-        borderRadius: BorderRadius.circular(999),
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.20)),
       ),
-      child: Text(
-        value,
-        style: const TextStyle(
-          color: Color(0xFFFF8A00),
-          fontSize: 12,
-          fontWeight: FontWeight.w900,
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, color: color, size: 17),
+        const SizedBox(width: 7),
+        Flexible(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: const TextStyle(color: Color(0xFF0F172A),
+                  fontSize: 14, fontWeight: FontWeight.w900)),
+              Text(subtitle, style: const TextStyle(color: Color(0xFF64748B),
+                  fontSize: 10, fontWeight: FontWeight.w700)),
+            ]),
+          ),
         ),
-      ),
+      ]),
     );
   }
 }
@@ -1333,7 +947,6 @@ class _NavigationBackground extends StatelessWidget {
 
 class _NavigationBackgroundPainter extends CustomPainter {
   final bool dark;
-
   const _NavigationBackgroundPainter({required this.dark});
 
   @override
@@ -1343,54 +956,48 @@ class _NavigationBackgroundPainter extends CustomPainter {
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
 
-    final p1 = Path()
-      ..moveTo(-20, size.height * .17)
-      ..cubicTo(size.width * .28, size.height * .08, size.width * .56,
-          size.height * .32, size.width + 20, size.height * .20);
-
-    final p2 = Path()
-      ..moveTo(size.width + 20, size.height * .64)
-      ..cubicTo(size.width * .70, size.height * .52, size.width * .42,
-          size.height * .78, -20, size.height * .72);
-
-    canvas.drawPath(p1, routePaint);
-    canvas.drawPath(p2, routePaint);
+    canvas.drawPath(
+      Path()
+        ..moveTo(-20, size.height * .17)
+        ..cubicTo(size.width * .28, size.height * .08,
+            size.width * .56, size.height * .32, size.width + 20, size.height * .20),
+      routePaint,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(size.width + 20, size.height * .64)
+        ..cubicTo(size.width * .70, size.height * .52,
+            size.width * .42, size.height * .78, -20, size.height * .72),
+      routePaint,
+    );
 
     final dotPaint = Paint()
       ..color = const Color(0xFFFF8A00).withValues(alpha: dark ? .10 : .15);
-
     for (int i = 0; i < 18; i++) {
-      final x = ((i * 53) % size.width).toDouble();
-      final y = (55 + ((i * 97) % size.height)).toDouble();
-      canvas.drawCircle(Offset(x, y), 2.8, dotPaint);
+      canvas.drawCircle(
+        Offset(((i * 53) % size.width).toDouble(),
+            (55 + ((i * 97) % size.height)).toDouble()),
+        2.8, dotPaint,
+      );
     }
   }
 
   @override
-  bool shouldRepaint(covariant _NavigationBackgroundPainter oldDelegate) {
-    return oldDelegate.dark != dark;
-  }
+  bool shouldRepaint(covariant _NavigationBackgroundPainter old) => old.dark != dark;
 }
 
+// ── Data models ───────────────────────────────────────────────────────────────
+
 class _MetricData {
-  final String label;
-  final String value;
+  final String label, value;
   final IconData icon;
   final Color color;
-
   const _MetricData(this.label, this.value, this.icon, this.color);
 }
 
 class _Stop {
-  final String label;
-  final String address;
-  final bool isOrigin;
-  final bool completed;
-
-  const _Stop({
-    required this.label,
-    required this.address,
-    required this.isOrigin,
-    required this.completed,
-  });
+  final String label, address;
+  final bool isOrigin, completed;
+  const _Stop({required this.label, required this.address,
+      required this.isOrigin, required this.completed});
 }

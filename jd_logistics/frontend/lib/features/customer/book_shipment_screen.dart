@@ -10,6 +10,7 @@ import 'package:jd_style_logistics/core/widgets/custom_button.dart';
 import 'package:jd_style_logistics/core/widgets/custom_textfield.dart';
 import 'package:jd_style_logistics/core/widgets/glass_card.dart';
 import 'package:jd_style_logistics/core/widgets/gradient_background.dart';
+import 'package:jd_style_logistics/features/customer/address_picker_screen.dart';
 import 'package:jd_style_logistics/features/customer/courier_payment_screen.dart';
 import 'package:jd_style_logistics/services/courier_service.dart';
 
@@ -25,6 +26,9 @@ class _BookShipmentScreenState extends State<BookShipmentScreen>
   final _pickupCtrl = TextEditingController();
   final _dropCtrl = TextEditingController();
   final _weightCtrl = TextEditingController();
+  final _lengthCtrl = TextEditingController();
+  final _widthCtrl = TextEditingController();
+  final _heightCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
 
   late final AnimationController _floatCtrl;
@@ -35,6 +39,10 @@ class _BookShipmentScreenState extends State<BookShipmentScreen>
   String _selectedPartner = 'Delhivery';
   bool _insurance = true;
   bool _estimating = false;
+
+  // Coordinates from address picker
+  double _pickupLat = 0, _pickupLng = 0;
+  double _dropLat = 0, _dropLng = 0;
 
   final _types = const [
     _ShipmentType('Document', 'Files & papers', Icons.description_rounded, '₹99'),
@@ -77,6 +85,9 @@ class _BookShipmentScreenState extends State<BookShipmentScreen>
     _pickupCtrl.dispose();
     _dropCtrl.dispose();
     _weightCtrl.dispose();
+    _lengthCtrl.dispose();
+    _widthCtrl.dispose();
+    _heightCtrl.dispose();
     _notesCtrl.dispose();
     _floatCtrl.dispose();
     _routeCtrl.dispose();
@@ -163,7 +174,12 @@ class _BookShipmentScreenState extends State<BookShipmentScreen>
                                     pickupCtrl: _pickupCtrl,
                                     dropCtrl: _dropCtrl,
                                     weightCtrl: _weightCtrl,
+                                    lengthCtrl: _lengthCtrl,
+                                    widthCtrl: _widthCtrl,
+                                    heightCtrl: _heightCtrl,
                                     notesCtrl: _notesCtrl,
+                                    onPickupMap: _pickPickupAddress,
+                                    onDropMap: _pickDropAddress,
                                   ),
                                 ),
                                 SizedBox(
@@ -226,10 +242,13 @@ class _BookShipmentScreenState extends State<BookShipmentScreen>
 
     setState(() => _estimating = true);
 
-    final weightStr = _weightCtrl.text.isNotEmpty ? _weightCtrl.text : '1 kg';
+    final weightStr = _weightCtrl.text.isNotEmpty ? _weightCtrl.text : '1';
     final weightNum = double.tryParse(
             weightStr.replaceAll(RegExp(r'[^0-9.]'), '')) ??
         1.0;
+    final lengthNum = double.tryParse(_lengthCtrl.text.trim());
+    final widthNum  = double.tryParse(_widthCtrl.text.trim());
+    final heightNum = double.tryParse(_heightCtrl.text.trim());
 
     double estimatedTotal;
 
@@ -241,6 +260,13 @@ class _BookShipmentScreenState extends State<BookShipmentScreen>
         'package_type': _selectedType,
         'mode': _selectedMode.toLowerCase(),
         'insurance': _insurance,
+        if (lengthNum != null) 'length': lengthNum,
+        if (widthNum  != null) 'width':  widthNum,
+        if (heightNum != null) 'height': heightNum,
+        if (_pickupLat != 0 || _pickupLng != 0) 'pickup_lat': _pickupLat,
+        if (_pickupLat != 0 || _pickupLng != 0) 'pickup_lng': _pickupLng,
+        if (_dropLat != 0 || _dropLng != 0) 'delivery_lat': _dropLat,
+        if (_dropLat != 0 || _dropLng != 0) 'delivery_lng': _dropLng,
       });
 
       estimatedTotal =
@@ -273,7 +299,7 @@ class _BookShipmentScreenState extends State<BookShipmentScreen>
         packageType: _selectedType,
         partner: _selectedPartner,
         mode: _selectedMode.toLowerCase(),
-        weight: weightStr,
+        weight: '$weightNum kg',
         withInsurance: _insurance,
         notes: _notesCtrl.text.trim(),
       ),
@@ -283,6 +309,42 @@ class _BookShipmentScreenState extends State<BookShipmentScreen>
   double _basePriceForType() {
     final rawPrice = _type.price.replaceAll(RegExp(r'[^0-9]'), '');
     return double.tryParse(rawPrice) ?? 149.0;
+  }
+
+  Future<void> _pickPickupAddress() async {
+    final result = await context.push<AddressPickerResult>(
+      '/pick-address?title=Pickup+Location',
+      extra: <String, dynamic>{
+        'address': _pickupCtrl.text,
+        'lat': _pickupLat,
+        'lng': _pickupLng,
+      },
+    );
+    if (result != null && mounted) {
+      setState(() {
+        _pickupCtrl.text = result.address;
+        _pickupLat = result.lat;
+        _pickupLng = result.lng;
+      });
+    }
+  }
+
+  Future<void> _pickDropAddress() async {
+    final result = await context.push<AddressPickerResult>(
+      '/pick-address?title=Delivery+Location',
+      extra: <String, dynamic>{
+        'address': _dropCtrl.text,
+        'lat': _dropLat,
+        'lng': _dropLng,
+      },
+    );
+    if (result != null && mounted) {
+      setState(() {
+        _dropCtrl.text = result.address;
+        _dropLat = result.lat;
+        _dropLng = result.lng;
+      });
+    }
   }
 }
 
@@ -547,13 +609,23 @@ class _BookingForm extends StatelessWidget {
   final TextEditingController pickupCtrl;
   final TextEditingController dropCtrl;
   final TextEditingController weightCtrl;
+  final TextEditingController lengthCtrl;
+  final TextEditingController widthCtrl;
+  final TextEditingController heightCtrl;
   final TextEditingController notesCtrl;
+  final VoidCallback onPickupMap;
+  final VoidCallback onDropMap;
 
   const _BookingForm({
     required this.pickupCtrl,
     required this.dropCtrl,
     required this.weightCtrl,
+    required this.lengthCtrl,
+    required this.widthCtrl,
+    required this.heightCtrl,
     required this.notesCtrl,
+    required this.onPickupMap,
+    required this.onDropMap,
   });
 
   @override
@@ -569,26 +641,72 @@ class _BookingForm extends StatelessWidget {
             subtitle: 'Add route details for smart pricing',
           ),
           const SizedBox(height: 16),
-          CustomTextField(
-            controller: pickupCtrl,
-            label: 'Pickup Address',
-            hint: 'Mumbai, Navi Mumbai, warehouse or office',
-            prefixIcon: Icons.my_location_rounded,
-          ),
+          Row(children: [
+            Expanded(child: CustomTextField(
+              controller: pickupCtrl,
+              label: 'Pickup Address',
+              hint: 'Mumbai, Navi Mumbai, warehouse or office',
+              prefixIcon: Icons.my_location_rounded,
+            )),
+            const SizedBox(width: 8),
+            _MapBtn(onTap: onPickupMap),
+          ]),
           const SizedBox(height: 14),
-          CustomTextField(
-            controller: dropCtrl,
-            label: 'Delivery Address',
-            hint: 'Delhi, Dubai, Singapore, London...',
-            prefixIcon: Icons.location_on_rounded,
-          ),
+          Row(children: [
+            Expanded(child: CustomTextField(
+              controller: dropCtrl,
+              label: 'Delivery Address',
+              hint: 'Delhi, Dubai, Singapore, London...',
+              prefixIcon: Icons.location_on_rounded,
+            )),
+            const SizedBox(width: 8),
+            _MapBtn(onTap: onDropMap),
+          ]),
           const SizedBox(height: 14),
           CustomTextField(
             controller: weightCtrl,
-            label: 'Approx Weight',
-            hint: 'Example: 2 kg / 120 kg / 1 container',
+            label: 'Weight (kg)',
+            hint: 'e.g. 2.5',
             prefixIcon: Icons.scale_rounded,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
           ),
+          const SizedBox(height: 14),
+          const _SectionTitle(
+            title: 'Dimensions (cm)',
+            subtitle: 'Length × Width × Height — optional',
+          ),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(
+              child: CustomTextField(
+                controller: lengthCtrl,
+                label: 'Length',
+                hint: '30',
+                prefixIcon: Icons.straighten_rounded,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: CustomTextField(
+                controller: widthCtrl,
+                label: 'Width',
+                hint: '20',
+                prefixIcon: Icons.straighten_rounded,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: CustomTextField(
+                controller: heightCtrl,
+                label: 'Height',
+                hint: '15',
+                prefixIcon: Icons.height_rounded,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
+            ),
+          ]),
           const SizedBox(height: 14),
           CustomTextField(
             controller: notesCtrl,
@@ -940,4 +1058,26 @@ class _Mode {
   final Color color;
 
   const _Mode(this.title, this.subtitle, this.icon, this.color);
+}
+
+class _MapBtn extends StatelessWidget {
+  final VoidCallback onTap;
+  const _MapBtn({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: AppColors.primary.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+        ),
+        child: const Icon(Icons.map_rounded, color: AppColors.primary, size: 22),
+      ),
+    );
+  }
 }
